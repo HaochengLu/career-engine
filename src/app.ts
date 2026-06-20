@@ -71,7 +71,7 @@ app.post("/api/report/generate", upload.array("images", 4), async (req, res) => 
           tier,
           createdAt: nowIso(),
           status: "failed",
-          error: `今天的完整报告名额已用完（${quota.used}/${quota.limit}）。请明天再试，或先使用快速版。`,
+          error: `今天的生成名额已用完（${quota.used}/${quota.limit}）。请明天再试。`,
         }),
       );
     }

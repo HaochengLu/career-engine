@@ -112,19 +112,19 @@ function dayKey(): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-function quotaKey(tier: Tier): string {
-  return `quota:${tier}:${dayKey()}`;
+function quotaKey(): string {
+  return `quota:report:${dayKey()}`;
 }
 
 async function reserveWorkerQuota(tier: Tier, env: WorkerEnv): Promise<QuotaDecision> {
-  if (tier !== "full" || !env.QUOTA_DO) return reserveReportQuota(tier);
+  if (!env.QUOTA_DO) return reserveReportQuota(tier);
 
-  const limit = Math.floor(config.quota.fullDailyLimit);
+  const limit = Math.floor(config.quota.dailyLimit);
   if (!Number.isFinite(limit) || limit <= 0) {
     return { allowed: true, used: 0, limit: 0, remaining: 0, mode: "off" };
   }
 
-  const key = quotaKey(tier);
+  const key = quotaKey();
   const id = env.QUOTA_DO.idFromName(key);
   const res = await env.QUOTA_DO.get(id).fetch(
     new Request("https://quota.local/reserve", {
@@ -199,7 +199,7 @@ async function handleGenerate(request: Request, env: WorkerEnv): Promise<Respons
           tier,
           createdAt: nowIso(),
           status: "failed",
-          error: `今天的完整报告名额已用完（${quota.used}/${quota.limit}）。请明天再试，或先使用快速版。`,
+          error: `今天的生成名额已用完（${quota.used}/${quota.limit}）。请明天再试。`,
         }),
         429,
       );
@@ -242,7 +242,7 @@ export class QuotaCounter {
       remaining: Math.max(0, limit - cappedUsed),
       mode: "durable_object",
       key,
-      reason: used <= limit ? undefined : "今日完整报告名额已用完。",
+      reason: used <= limit ? undefined : "今日生成名额已用完。",
     } satisfies QuotaDecision);
   }
 }

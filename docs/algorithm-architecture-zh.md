@@ -379,7 +379,7 @@ QA 检查：
 
 | 环节 | 默认模型 | 原因 |
 | --- | --- | --- |
-| parseResume | `gpt-5.4` | 需要读图片、识别简历结构、保守处理低置信 OCR；`gpt-5.4` 速度和视觉理解更适合作为入口 |
+| parseResume | `gpt-5.4-mini` | 需要读图片和结构化简历内容；该环节以提取为主，用最快模型降低图片解析超时风险 |
 | extractEvidence | `gpt-5.5` | 证据拆分和强度评级是全链路地基，错了会污染后续 |
 | synthesizeRoles | `gpt-5.5` | 需要开放世界职业本体合成、多通道召回、硬门槛意识 |
 | opportunityScout | `gpt-5.4` | 条件触发的查漏环节，重点是补高上限相邻方向，用 `gpt-5.4` 控制时延 |
@@ -394,7 +394,7 @@ QA 检查：
 LLM_PROVIDER=openai
 OPENAI_BASE_URL=
 OPENAI_MODEL=gpt-5.4-mini
-WORKER_MODEL_PARSE_RESUME=gpt-5.4
+WORKER_MODEL_PARSE_RESUME=gpt-5.4-mini
 WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
 WORKER_MODEL_SYNTHESIZE_ROLES=gpt-5.5
 WORKER_MODEL_OPPORTUNITY_SCOUT=gpt-5.4
@@ -440,7 +440,7 @@ WORKER_MODEL_RED_TEAM=gpt-5.5
 模型配置集中在 `src/config.ts`。本地 Node 从 `process.env` 读取，Cloudflare Worker 会在请求进入时把 Worker bindings 注入同一套配置读取函数，所以业务 worker 不需要关心部署平台：
 
 ```ts
-WORKER_MODEL_PARSE_RESUME=gpt-5.4
+WORKER_MODEL_PARSE_RESUME=gpt-5.4-mini
 WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
 WORKER_MODEL_SYNTHESIZE_ROLES_FAST=gpt-5.4-mini
 WORKER_MODEL_SYNTHESIZE_ROLES=gpt-5.5

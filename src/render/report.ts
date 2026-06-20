@@ -138,14 +138,14 @@ function strategyCard(s: Strategy): string {
   </div>`;
 }
 
-// 全凭自觉付费：微信收款码。初版给 ¥1 码、完整给 ¥10 码，另附自定义金额码。
+// 全凭自觉付费：生成前已展示收款码；报告里保留入口，方便用户补扫或追加支持。
 function paymentBlock(tier: Tier): string {
   const p = getPaymentInfo();
   const main = tier === "full" ? { src: p.qrFull, label: "完整报告 ¥10" } : { src: p.qrTrial, label: "初版 ¥1" };
   const box = (src: string, label: string) =>
     src ? `<div class="qrbox"><img class="qr" src="${esc(src)}" alt="${esc(label)}"><div>${esc(label)}</div></div>` : "";
   return `<div class="pay">
-    <div class="small muted">这份报告免费给你看。如果判断对你有用、愿意支持，微信扫码自觉付款即可（不付也没关系）。</div>
+    <div class="small muted">如果刚才还没来得及扫码，或想追加支持，可以在这里补扫。付款完全靠自觉，不做校验。</div>
     <div class="qrs">
       ${box(main.src, main.label)}
       ${box(p.qrCustom, "其它金额 / 随意打赏")}

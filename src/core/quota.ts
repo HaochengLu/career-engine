@@ -24,8 +24,8 @@ function dayKey(): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-function quotaKey(tier: Tier): string {
-  return `quota:${tier}:${dayKey()}`;
+function quotaKey(): string {
+  return `quota:report:${dayKey()}`;
 }
 
 function redisConfigured(): boolean {
@@ -61,7 +61,7 @@ async function reserveWithRedis(key: string, limit: number): Promise<QuotaDecisi
     remaining: Math.max(0, limit - cappedUsed),
     mode: "redis",
     key,
-    reason: used <= limit ? undefined : "今日完整报告名额已用完。",
+    reason: used <= limit ? undefined : "今日生成名额已用完。",
   };
 }
 
@@ -76,21 +76,19 @@ function reserveWithMemory(key: string, limit: number): QuotaDecision {
     remaining: Math.max(0, limit - cappedUsed),
     mode: "memory",
     key,
-    reason: used <= limit ? undefined : "今日完整报告名额已用完。",
+    reason: used <= limit ? undefined : "今日生成名额已用完。",
   };
 }
 
 export async function reserveReportQuota(tier: Tier): Promise<QuotaDecision> {
-  if (tier !== "full") {
-    return { allowed: true, used: 0, limit: 0, remaining: 0, mode: "off" };
-  }
+  void tier;
 
-  const limit = Math.floor(config.quota.fullDailyLimit);
+  const limit = Math.floor(config.quota.dailyLimit);
   if (!Number.isFinite(limit) || limit <= 0) {
     return { allowed: true, used: 0, limit: 0, remaining: 0, mode: "off" };
   }
 
-  const key = quotaKey(tier);
+  const key = quotaKey();
   if (!redisConfigured()) return reserveWithMemory(key, limit);
 
   try {

@@ -12,7 +12,8 @@ Career Engine 是一个轻量的职业规划小工具：用户上传简历截图
 
 1. 打开网页，上传 1-4 张简历截图。
 2. 填写目标城市/国家、想尝试或想避开的方向、学校专业、年级或工作年限等可选信息。
-3. 点击生成，快速版通常约 2 分钟，完整报告通常约 4-6 分钟。
+3. 选择版本，微信扫码自觉付款后，点击“我已支付，开始生成”。
+4. 快速版通常约 2 分钟，完整报告通常约 4-6 分钟。
 4. 页面直接返回报告：推荐路径、备选路径、不建议路径、证据解释、风险提醒和补强建议。
 
 这个项目不会创建账号，不依赖数据库，不保存简历文件。一次请求结束后，报告只存在于当前页面响应里；刷新页面后需要重新生成。
@@ -133,7 +134,7 @@ DEFAULT_MODEL=claude-opus-4-8
 
 | 环节 | 做什么 | 默认模型 |
 | --- | --- | --- |
-| `parseResume` | 读简历截图，提取结构化信息 | `gpt-5.4` |
+| `parseResume` | 读简历截图，提取结构化信息 | `gpt-5.4-mini` |
 | `extractEvidence` | 把经历拆成证据，并判断强度 | `gpt-5.5` |
 | `synthesizeRoles` | 根据证据合成候选职业画像 | `gpt-5.5` |
 | `opportunityScout` | 补充相邻/新兴/市场拉动方向 | `gpt-5.4` |
@@ -194,7 +195,7 @@ npx wrangler secret put OPENAI_BASE_URL
 LLM_PROVIDER=openai
 OPENAI_MODEL=gpt-5.4-mini
 OPENAI_PER_KEY_CONCURRENCY=8
-WORKER_MODEL_PARSE_RESUME=gpt-5.4
+WORKER_MODEL_PARSE_RESUME=gpt-5.4-mini
 WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
 WORKER_MODEL_SYNTHESIZE_ROLES_FAST=gpt-5.4-mini
 WORKER_MODEL_SYNTHESIZE_ROLES=gpt-5.5
@@ -204,7 +205,7 @@ WORKER_MODEL_STRATEGY=gpt-5.5
 WORKER_MODEL_RED_TEAM=gpt-5.5
 ENABLE_WEB_SEARCH=false
 GEN_TIMEOUT_MS=760000
-QUOTA_FULL_DAILY_LIMIT=150
+QUOTA_DAILY_LIMIT=100
 QUOTA_TIME_ZONE=Asia/Shanghai
 ```
 
@@ -220,7 +221,7 @@ npm run cf:deploy
 - `wrangler.toml`：Worker、Static Assets、Durable Object 配置；
 - `dist/cloudflare-worker.js`：API 直传部署时使用的编译产物，可由 `npm run cf:build` 重新生成。
 
-Cloudflare 上的每日 150 次完整报告限制由 Durable Object 计数，比单机内存计数更适合线上使用。仍然建议根据真实访问量观察日志和模型账单。
+Cloudflare 上的每日 100 次生成请求限制由 Durable Object 计数，比单机内存计数更适合线上使用。仍然建议根据真实访问量观察日志和模型账单。
 
 ### 部署到 Vercel
 
@@ -236,7 +237,7 @@ OPENAI_API_KEY=你的 API key
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-5.4-mini
 OPENAI_PER_KEY_CONCURRENCY=8
-WORKER_MODEL_PARSE_RESUME=gpt-5.4
+WORKER_MODEL_PARSE_RESUME=gpt-5.4-mini
 WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
 WORKER_MODEL_SYNTHESIZE_ROLES=gpt-5.5
 WORKER_MODEL_OPPORTUNITY_SCOUT=gpt-5.4
@@ -253,10 +254,10 @@ OPENAI_API_KEYS=key_1,key_2,key_3
 
 不要把真实 key 写进 GitHub。Vercel 上应在 Environment Variables 里配置。
 
-完整报告（¥10 档）默认每天最多 150 次：
+所有报告生成请求默认每天最多 100 次：
 
 ```text
-QUOTA_FULL_DAILY_LIMIT=150
+QUOTA_DAILY_LIMIT=100
 QUOTA_TIME_ZONE=Asia/Shanghai
 ```
 

@@ -77,8 +77,11 @@ export const config = {
     },
   },
   quota: {
+    get dailyLimit() {
+      return Number(env("QUOTA_DAILY_LIMIT") ?? env("QUOTA_FULL_DAILY_LIMIT") ?? 100);
+    },
     get fullDailyLimit() {
-      return Number(env("QUOTA_FULL_DAILY_LIMIT") ?? 150);
+      return Number(env("QUOTA_DAILY_LIMIT") ?? env("QUOTA_FULL_DAILY_LIMIT") ?? 100);
     },
     get timeZone() {
       return env("QUOTA_TIME_ZONE") ?? "Asia/Shanghai";
@@ -121,7 +124,7 @@ export const config = {
 // “模型即配置”：想给某些 worker 换更便宜/更快的模型（降低 Vercel 单次时延），改这里即可，不改业务逻辑。
 export const workerModels: Record<string, string> = {
   get parseResume() {
-    return modelFor("WORKER_MODEL_PARSE_RESUME", "gpt-5.4");
+    return modelFor("WORKER_MODEL_PARSE_RESUME", "gpt-5.4-mini");
   },
   get extractEvidence() {
     return modelFor("WORKER_MODEL_EXTRACT_EVIDENCE", "gpt-5.5");

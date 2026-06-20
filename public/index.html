@@ -17,9 +17,14 @@ label{display:block;font-size:13px;color:var(--muted);margin-top:12px}
 input,textarea,select{font:inherit;width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;margin-top:4px}
 .row{display:flex;gap:10px}.row>div{flex:1}
 .btn{display:inline-block;background:var(--accent);color:#fff;border:0;padding:12px 22px;border-radius:9px;font-weight:600;font-size:16px;cursor:pointer;margin-top:16px}
+.btn.secondary{background:#fff;color:var(--accent);border:1px solid #d8b39e;margin-left:8px}
 .btn[disabled]{opacity:.5}
 .notice{background:#fff7ed;border:1px solid #f3d8b6;border-radius:10px;padding:12px 14px;font-size:13px;color:#7a4a1d;margin-top:10px}
 .hint{font-size:12px;color:var(--muted)}
+.pay-panel{display:none;background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;margin:14px 0;text-align:center}
+.pay-panel h2{font-size:18px;margin:0 0 6px}
+.pay-title{margin:4px 0 10px;font-weight:600}
+.pay-qr{width:220px;max-width:80%;height:auto;border:1px solid var(--line);border-radius:10px;display:block;margin:10px auto}
 .progress{display:none;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:10px}
 .progress-head{display:flex;justify-content:space-between;gap:12px;font-size:13px;font-weight:600}
 .progress-track{height:8px;background:#f0ece4;border-radius:999px;overflow:hidden;margin:9px 0 6px}
@@ -45,7 +50,7 @@ legend{font-size:13px;color:var(--muted);padding:0 6px}
         <option value="trial">快速版（¥1，先看大方向）</option>
         <option value="full">完整报告（¥10，包含路径、缺口和行动建议）</option>
       </select>
-      <p class="hint">目前是生成后自觉付款；快速版通常约 2 分钟，完整报告通常约 4-6 分钟，图片多或上游模型慢时会更久。</p>
+      <p class="hint">目前是自觉付款：先扫码，点“我已支付”后开始生成。快速版通常约 2 分钟，完整报告通常约 4-6 分钟，图片多或上游模型慢时会更久。</p>
     </div>
 
     <fieldset>
@@ -70,7 +75,15 @@ legend{font-size:13px;color:var(--muted);padding:0 6px}
       <label>其它想补充的话</label><textarea name="notes" rows="2" placeholder="如 我想转行但不知道从哪里开始，或者我更看重稳定。"></textarea>
     </fieldset>
 
-    <button class="btn" id="btn" type="submit">生成我的职业方向报告</button>
+    <button class="btn" id="btn" type="submit">查看收款码</button>
+    <div id="payPanel" class="pay-panel">
+      <h2>微信扫码付款</h2>
+      <p id="payTitle" class="pay-title">快速版 ¥1</p>
+      <img id="payQr" class="pay-qr" src="/pay-1.png" alt="微信收款码">
+      <p class="hint">付款完全靠自觉，不做自动校验。确认完成后点击下面按钮，系统才会开始读取截图并生成报告。</p>
+      <button class="btn" id="paidBtn" type="button">我已支付，开始生成</button>
+      <button class="btn secondary" id="editBtn" type="button">返回修改</button>
+    </div>
     <div id="msg" class="notice" style="display:none"></div>
     <div id="progress" class="progress">
       <div class="progress-head"><span id="progressLabel">准备材料</span><span id="progressPct">0%</span></div>
@@ -83,6 +96,11 @@ legend{font-size:13px;color:var(--muted);padding:0 6px}
 <script>
 const f = document.getElementById('f');
 const btn = document.getElementById('btn');
+const payPanel = document.getElementById('payPanel');
+const payTitle = document.getElementById('payTitle');
+const payQr = document.getElementById('payQr');
+const paidBtn = document.getElementById('paidBtn');
+const editBtn = document.getElementById('editBtn');
 const msg = document.getElementById('msg');
 const progress = document.getElementById('progress');
 const progressLabel = document.getElementById('progressLabel');
@@ -91,6 +109,10 @@ const progressFill = document.getElementById('progressFill');
 const progressDetail = document.getElementById('progressDetail');
 const MAX_IMAGES = 4;
 const MAX_UPLOAD_BYTES = 3.8 * 1024 * 1024;
+const PAYMENT = {
+  trial: { src: '/pay-1.png', label: '快速版 ¥1' },
+  full: { src: '/pay-10.png', label: '完整报告 ¥10' },
+};
 const IMAGE_PROFILES = [
   { maxSide: 1600, quality: 0.82 },
   { maxSide: 1300, quality: 0.74 },
@@ -132,6 +154,14 @@ function showStatus(text) {
 function selectedTier() {
   const data = new FormData(f);
   return data.get('tier') === 'full' ? 'full' : 'trial';
+}
+
+function updatePaymentPanel() {
+  const tier = selectedTier();
+  const pay = PAYMENT[tier] || PAYMENT.trial;
+  payTitle.textContent = pay.label;
+  payQr.src = pay.src;
+  payQr.alt = pay.label + ' 微信收款码';
 }
 
 function setProgress(pct, label, detail) {
@@ -262,12 +292,37 @@ function normalizeError(err) {
 
 f.addEventListener('submit', async (e) => {
   e.preventDefault();
+  stopProgress(true);
+  updatePaymentPanel();
+  payPanel.style.display = 'block';
+  btn.textContent = '重新查看收款码';
+  showStatus('请先用微信扫码付款。付款完成后，点击“我已支付，开始生成”。');
+  payPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+editBtn.addEventListener('click', () => {
+  stopProgress(true);
+  payPanel.style.display = 'none';
+  showStatus('可以继续修改信息，确认后再查看收款码。');
+  btn.disabled = false;
+  paidBtn.disabled = false;
+  editBtn.disabled = false;
+  btn.textContent = '查看收款码';
+});
+
+f.querySelector('select[name="tier"]').addEventListener('change', () => {
+  if (payPanel.style.display !== 'none') updatePaymentPanel();
+});
+
+paidBtn.addEventListener('click', async () => {
   const tier = selectedTier();
-  btn.disabled = true; btn.textContent = '生成中…';
+  btn.disabled = true; paidBtn.disabled = true; editBtn.disabled = true;
+  paidBtn.textContent = '生成中…';
   startProgress(tier);
   showStatus('正在准备材料，图片会先自动压缩。请先不要关闭页面。');
   try {
     const body = await buildPayload(f);
+    body.set('payment_ack', 'self_confirmed');
     showStatus(tier === 'full'
       ? '正在生成完整报告，通常需要 4-6 分钟。请先不要关闭页面。'
       : '正在生成快速版报告，通常需要约 2 分钟。请先不要关闭页面。');
@@ -280,7 +335,9 @@ f.addEventListener('submit', async (e) => {
   } catch (err) {
     stopProgress(false);
     msg.textContent = '出错了：' + normalizeError(err);
-    btn.disabled = false; btn.textContent = '重试';
+    btn.disabled = false; paidBtn.disabled = false; editBtn.disabled = false;
+    btn.textContent = '重新查看收款码';
+    paidBtn.textContent = '我已支付，开始生成';
   }
 });
 </script>
