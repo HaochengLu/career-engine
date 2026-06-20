@@ -366,7 +366,7 @@ QA 检查：
 
 ## 6. 模型选择建议
 
-本节是截至 2026-06-20 的建议。当前部署优先使用 OpenAI 兼容接口；本项目已验证目标端点支持 `gpt-5.5`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-4.1-mini` 等模型。模型能力和价格会变化，正式上线前建议用 30-50 份真实简历样本做小规模 A/B eval。
+本节是截至 2026-06-20 的建议。项目支持 OpenAI 官方 API，也支持符合 OpenAI 协议的私有网关。模型能力、价格和网关可用模型会变化，正式上线前建议用 30-50 份真实简历样本做小规模 A/B eval。
 
 官方参考：
 
@@ -392,7 +392,7 @@ QA 检查：
 
 ```env
 LLM_PROVIDER=openai
-OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_BASE_URL=https://your-openai-compatible-endpoint/v1
 OPENAI_MODEL=gpt-5.4-mini
 WORKER_MODEL_PARSE_RESUME=gpt-5.4
 WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
@@ -402,7 +402,7 @@ WORKER_MODEL_STRATEGY=gpt-5.5
 WORKER_MODEL_RED_TEAM=gpt-5.5
 ```
 
-如果使用 OpenAI 兼容网关，把 `OPENAI_BASE_URL` 换成自己的兼容端点，例如 `https://your-openai-compatible-endpoint/v1`。
+如果使用官方 OpenAI，可以把 `OPENAI_BASE_URL` 设为 `https://api.openai.com/v1`。如果使用第三方或自建兼容网关，只在 `.env`、Vercel Environment Variables、服务器 secret manager 里填写真实地址，不要把私有网关域名写进公开文档或提交到 GitHub。
 
 ### 6.2 低成本配置
 
