@@ -43,6 +43,7 @@ export const config = {
   // 联网检索（默认关）：开启后用一次检索为“市场拉动/新兴岗位”召回注入实时市场信号；失败自动降级为无检索。
   enableWebSearch: process.env.ENABLE_WEB_SEARCH === "true",
   port: Number(process.env.PORT ?? 3000),
+  generationTimeoutMs: Number(process.env.GEN_TIMEOUT_MS ?? 280_000),
   // 全凭自觉付费：微信收款码图片（放在 public/，Vercel 会按根路径静态托管）
   payment: {
     qrTrial: process.env.PAY_QR_TRIAL ?? "/pay-1.png",
@@ -59,6 +60,7 @@ export const config = {
 export const workerModels: Record<string, string> = {
   parseResume: modelFor("WORKER_MODEL_PARSE_RESUME", "gpt-5.4"),
   extractEvidence: modelFor("WORKER_MODEL_EXTRACT_EVIDENCE", "gpt-5.5"),
+  synthesizeRolesFast: modelFor("WORKER_MODEL_SYNTHESIZE_ROLES_FAST", "gpt-5.4-mini"),
   synthesizeRoles: modelFor("WORKER_MODEL_SYNTHESIZE_ROLES", "gpt-5.5"),
   opportunityScout: modelFor("WORKER_MODEL_OPPORTUNITY_SCOUT", "gpt-5.4"),
   strategy: modelFor("WORKER_MODEL_STRATEGY", "gpt-5.5"),

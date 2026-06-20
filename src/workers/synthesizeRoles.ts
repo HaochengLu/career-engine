@@ -20,6 +20,7 @@ const ANCHOR_IDS = [
 ];
 const ANCHOR_EXAMPLES = ANCHOR_IDS.map((id) => seed.archetypes.find((a) => a.role_id === id)).filter(Boolean);
 const SEED_INDEX = seed.archetypes.map((a) => `${a.role_id} = ${a.display_name}`).join("\n");
+const FAST_ANCHOR_EXAMPLES = ANCHOR_EXAMPLES.slice(0, 3);
 
 const SYSTEM = `你是职业本体合成器 + 多通道召回器。给定用户的能力证据与意愿，产出 12-18 个候选职业原型（role_archetype），每个都是结构化“证据契约”。
 
@@ -50,12 +51,26 @@ Candidate Longlist =
 - required_evidence 的 capability 只能取给定维度 id；min_strength 用 0-5；role_id 用 family.archetype 形式且稳定。
 全程中文 display_name。`;
 
+const FAST_SYSTEM = `你是职业候选召回器。给定用户能力证据与意愿，快速产出 6-8 个候选职业原型，供初版报告排序使用。
+要求：
+- 必须覆盖 evidence_near、user_thesis，并至少包含 1 个 transferable_adjacent / market_pull / emerging 中的高上限相邻方向。
+- 候选要少而准：优先选能形成 Top 3 的方向，不要为了凑数量扩写。
+- 诚实标注硬门槛 hard_gates，不要把兴趣当能力，不要发明证据。
+- required_evidence.capability 只能取给定能力维度 id；role_id 用 family.archetype 形式且稳定。
+全程中文 display_name。`;
+
+export interface SynthesizeRolesOptions {
+  mode?: "full" | "fast";
+}
+
 export async function synthesizeRoles(
   capabilityVector: CapabilityScore[],
   evidence: EvidenceItem[],
   inputs: UserInputs,
   marketContext = "",
+  options: SynthesizeRolesOptions = {},
 ): Promise<{ value: RoleArchetype[]; model: string }> {
+  const fast = options.mode === "fast";
   const evidenceSummary = evidence.map((e) => ({
     id: e.evidence_id,
     claim: e.claim,
@@ -65,7 +80,7 @@ export async function synthesizeRoles(
   }));
   const frontier = [...new Set(evidence.flatMap((e) => e.frontier_signals))];
 
-  const userText = `请为该用户做多通道候选召回，产出 12-18 个候选职业原型 longlist。
+  const userText = `请为该用户做多通道候选召回，产出 ${fast ? "6-8" : "12-18"} 个候选职业原型 longlist。
 
 能力维度 id（required_evidence.capability 只能用这些）：
 ${CAPABILITY_LIST_TEXT}
@@ -84,21 +99,22 @@ ${JSON.stringify(inputs, null, 2)}
 可直接复用的高频职业（命中就用同样的 role_id；不在列表里的请自行合成）：
 ${SEED_INDEX}
 
-证据契约的结构示范（3 个完整示例，照此结构产出，但内容与召回通道要贴合本用户）：
-${JSON.stringify(ANCHOR_EXAMPLES, null, 2)}
+证据契约的结构示范（照此结构产出，但内容与召回通道要贴合本用户）：
+${JSON.stringify(fast ? FAST_ANCHOR_EXAMPLES : ANCHOR_EXAMPLES, null, 2)}
 ${marketContext ? `\n【实时市场信号（来自联网检索，供 market_pull / emerging 召回参考；需结合用户证据判断适配，不要照单全收）】\n${marketContext}\n` : ""}
 硬性要求：
-- 覆盖全部 5 条召回通道；transferable_adjacent、market_pull、emerging 各至少 1-2 个。
+- ${fast ? "覆盖 evidence_near、user_thesis，并至少给 1-2 个相邻/市场/新兴高上限方向。" : "覆盖全部 5 条召回通道；transferable_adjacent、market_pull、emerging 各至少 1-2 个。"}
 - 若存在前沿/新兴信号，必须据此召回对应的“新型复合岗位”作为 emerging 候选（按用户所在领域泛化，不要只会写 AI）。
 - 必须包含用户明确想要的方向（user_desired=true，recall_source=user_thesis），即使证据弱。`;
 
   const { value, model } = await getLlm().complete({
-    system: SYSTEM,
+    system: fast ? FAST_SYSTEM : SYSTEM,
     userText,
     schema: RoleListSchema,
     schemaName: "RoleList",
-    model: workerModels.synthesizeRoles!,
-    effort: "high",
+    model: fast ? workerModels.synthesizeRolesFast! : workerModels.synthesizeRoles!,
+    effort: fast ? "medium" : "high",
+    maxTokens: fast ? 9000 : undefined,
   });
 
   const roles: RoleArchetype[] = value.roles.map((r) => ({

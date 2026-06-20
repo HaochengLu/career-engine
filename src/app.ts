@@ -19,7 +19,7 @@ const upload = multer({
   limits: { fileSize: 2 * 1024 * 1024, files: 4 }, // 前端会压缩；后端继续限制体积，避免 Vercel 与 LLM 输入过载
 });
 
-const GEN_TIMEOUT_MS = 280_000; // 留在 Vercel maxDuration(300s) 之内主动兜底，避免被强杀
+const GEN_TIMEOUT_MS = config.generationTimeoutMs; // 应低于 Vercel maxDuration，避免被平台强杀
 const MAX_TOTAL_B64 = 6 * 1024 * 1024; // 所有图片 base64 合计上限
 
 function splitList(v: unknown): string[] {

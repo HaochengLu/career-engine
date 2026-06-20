@@ -147,7 +147,10 @@ export async function generateReport(
     else artifacts.worker_log.push(meta("marketSignal(skipped)", "code", undefined, marketTimed.durationMs));
 
     // 4) 多通道召回候选职业本体（证据近 + 相邻迁移 + 市场拉动 + 用户意愿 + 新兴前沿）
-    const rolesPromise = timed("synthesizeRoles", () => synthesizeRoles(artifacts.capability_vector!, ev.value, inputs, market));
+    const roleMode = tier === "trial" ? "fast" : "full";
+    const rolesPromise = timed(`synthesizeRoles(${roleMode})`, () =>
+      synthesizeRoles(artifacts.capability_vector!, ev.value, inputs, market, { mode: roleMode }),
+    );
     const scoutPromise =
       tier === "full"
         ? optionalTimed("opportunityScout(parallel)", () => opportunityScout([], ev.value, inputs, market))
@@ -155,7 +158,7 @@ export async function generateReport(
 
     const [rolesTimed, scoutTimed] = await Promise.all([rolesPromise, scoutPromise]);
     const roles = rolesTimed.value;
-    artifacts.worker_log.push(meta("synthesizeRoles", roles.model, undefined, rolesTimed.durationMs));
+    artifacts.worker_log.push(meta(`synthesizeRoles(${roleMode})`, roles.model, undefined, rolesTimed.durationMs));
     artifacts.roles = roles.value;
 
     if (scoutTimed.ok) {
