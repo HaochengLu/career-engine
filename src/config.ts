@@ -63,6 +63,7 @@ export const workerModels: Record<string, string> = {
   synthesizeRolesFast: modelFor("WORKER_MODEL_SYNTHESIZE_ROLES_FAST", "gpt-5.4-mini"),
   synthesizeRoles: modelFor("WORKER_MODEL_SYNTHESIZE_ROLES", "gpt-5.5"),
   opportunityScout: modelFor("WORKER_MODEL_OPPORTUNITY_SCOUT", "gpt-5.4"),
+  strategyFast: modelFor("WORKER_MODEL_STRATEGY_FAST", "gpt-5.4-mini"),
   strategy: modelFor("WORKER_MODEL_STRATEGY", "gpt-5.5"),
   redTeam: modelFor("WORKER_MODEL_RED_TEAM", "gpt-5.5"),
 };

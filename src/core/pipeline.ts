@@ -177,10 +177,11 @@ export async function generateReport(
     artifacts.worker_log.push(meta("scoreRoles", "code", undefined, scoresTimed.durationMs));
 
     // 6) 战略
-    const stratTimed = await timed("strategy", () => runStrategy(artifacts.scores!, ev.value, inputs));
+    const strategyMode = tier === "trial" ? "fast" : "full";
+    const stratTimed = await timed(`strategy(${strategyMode})`, () => runStrategy(artifacts.scores!, ev.value, inputs, { mode: strategyMode }));
     const strat = stratTimed.value;
     artifacts.strategy = strat.value;
-    artifacts.worker_log.push(meta("strategy", strat.model, undefined, stratTimed.durationMs));
+    artifacts.worker_log.push(meta(`strategy(${strategyMode})`, strat.model, undefined, stratTimed.durationMs));
 
     // 7) 对抗 review
     const rt =

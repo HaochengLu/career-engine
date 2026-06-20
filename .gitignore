@@ -6,3 +6,4 @@ data/storage/
 data/career.db
 data/career.db-*
 *.log
+.vercel

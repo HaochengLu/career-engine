@@ -21,12 +21,27 @@ const SYSTEM = `你是职业战略 worker。把已打分的候选职业转成一
 - 禁止任何过度承诺（如“保证/一定/必拿 offer/100%”）。不确定的地方用低置信表达，不要装确定。
 - 风格像咨询报告 + 求职战略卡：判断明确、短句、可截图转发。全程中文。`;
 
+const FAST_SYSTEM = `你是职业战略 worker。为“初版报告”快速生成清晰、可执行的职业方向判断。
+铁律：
+- 只给 3 条主路径：近期最现实、未来最有上限、挑战型；必须给 1 条暂不建议方向。
+- 必须填 adjacent_upside：选一个高上限相邻/新兴方向，不能和 3 条主路径重复。
+- 所有路径和 claim 只能引用真实 evidence_id，不得编造经历或 id。
+- 输出要短：每个字段直接给判断，不写长篇解释。gap_map 给 3 条，projects 给 1 个，narrative_rewrite 给 2 条，thirty_day_plan 给 3 条，claims 给 1 条核心判断。
+- 禁止“保证/一定/必拿 offer/100%”等过度承诺。
+全程中文。`;
+
+export interface StrategyOptions {
+  mode?: "full" | "fast";
+}
+
 export async function strategy(
   scores: RoleScore[],
   evidence: EvidenceItem[],
   inputs: UserInputs,
+  options: StrategyOptions = {},
 ): Promise<{ value: Strategy; model: string }> {
-  const top = scores.slice(0, 8);
+  const fast = options.mode === "fast";
+  const top = scores.slice(0, fast ? 5 : 8);
   const scoredSummary = top.map((s) => ({
     role_id: s.role_id,
     display_name: s.display_name,
@@ -49,7 +64,7 @@ export async function strategy(
   }));
   const validIds = evidence.map((e) => e.evidence_id).join(", ");
 
-  const userText = `根据以下已打分候选角色与证据，产出完整战略报告。
+  const userText = `根据以下已打分候选角色与证据，产出${fast ? "初版战略报告" : "完整战略报告"}。
 
 候选角色（已按 decision_score 排序，band 是内部分数的弱/中/强映射，仅供你判断，不要把两位数分写进报告）：
 ${JSON.stringify(scoredSummary, null, 2)}
@@ -66,20 +81,20 @@ ${JSON.stringify(inputs, null, 2)}
 - confidence_band 按所给 confidence 数值映射：≥0.7→高，0.4-0.7→中，<0.4→低；若你判断与数值不一致（如用户强烈想要但证据弱），必须在 recommendation 里说明理由。
 - 每个 project 必须对应 gap_map 里的某个缺口（在 proves 里点名它补的是哪个缺口），不要给与缺口无关的项目。
 - not_recommended 至少 1 条，写清为什么不建议优先以及更好的策略。
-- gap_map 至少 3 条；每条给 supporting_evidence_ids（指出哪条证据表明该缺口存在/相关，只能用真实 id；若纯属完全缺失则给空数组）。
-- projects 至少 1 个完整项目；thirty_day_plan 给可执行步骤。
-- claims 至少包含 1 条核心判断，带 supporting_evidence_ids 与 counter_evidence_ids。
+- gap_map ${fast ? "只给 3 条" : "至少 3 条"}；每条给 supporting_evidence_ids（指出哪条证据表明该缺口存在/相关，只能用真实 id；若纯属完全缺失则给空数组）。
+- projects ${fast ? "只给 1 个最关键项目" : "至少 1 个完整项目"}；thirty_day_plan ${fast ? "只给 3 条关键动作" : "给可执行步骤"}。
+- claims ${fast ? "只给 1 条核心判断" : "至少包含 1 条核心判断"}，带 supporting_evidence_ids 与 counter_evidence_ids。
 - 所有 *_evidence_ids 只能用上面列出的 id。`;
 
   const { value, model } = await getLlm().complete({
-    system: SYSTEM,
+    system: fast ? FAST_SYSTEM : SYSTEM,
     userText,
     schema: StrategySchema,
     schemaName: "Strategy",
-    model: workerModels.strategy!,
-    effort: "high",
+    model: fast ? workerModels.strategyFast! : workerModels.strategy!,
+    effort: fast ? "medium" : "high",
     // 输出规模随候选数/证据数增长，动态给上限，避免大输入时被 16000 截断。
-    maxTokens: Math.min(24000, 10000 + scores.length * 250 + evidence.length * 120),
+    maxTokens: fast ? Math.min(12000, 8000 + scores.length * 180 + evidence.length * 80) : Math.min(24000, 10000 + scores.length * 250 + evidence.length * 120),
   });
   return { value: value as Strategy, model };
 }
