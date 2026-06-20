@@ -84,8 +84,18 @@ LLM_PROVIDER=openai
 OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-5.4-mini
+OPENAI_PER_KEY_CONCURRENCY=8
 ENABLE_WEB_SEARCH=false
 ```
+
+如果你有多个 OpenAI 兼容 API key，用 `OPENAI_API_KEYS` 分摊并发。这个变量优先级高于 `OPENAI_API_KEY`：
+
+```env
+OPENAI_API_KEYS=key_1,key_2,key_3
+OPENAI_PER_KEY_CONCURRENCY=8
+```
+
+`OPENAI_PER_KEY_CONCURRENCY=8` 表示单个 key 同时最多跑 8 个模型请求。多个 key 会在同一个 Node/Vercel 实例内自动选当前 in-flight 最少的 key。注意：这不是全局分布式限流；如果 Vercel 同时启动多个实例，每个实例都会各自做一份本地 key 池调度。
 
 如果你使用的是 OpenAI 协议兼容服务，例如 newapi、oneapi 或公司内部代理，替换这两项即可：
 
@@ -160,6 +170,7 @@ LLM_PROVIDER=openai
 OPENAI_API_KEY=你的 API key
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-5.4-mini
+OPENAI_PER_KEY_CONCURRENCY=8
 WORKER_MODEL_PARSE_RESUME=gpt-5.4
 WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
 WORKER_MODEL_SYNTHESIZE_ROLES=gpt-5.5
@@ -169,7 +180,29 @@ WORKER_MODEL_RED_TEAM=gpt-5.5
 ENABLE_WEB_SEARCH=false
 ```
 
-如果使用 OpenAI 兼容代理，把 `OPENAI_BASE_URL` 和 `OPENAI_MODEL` 换成该服务实际支持的值。
+如果使用 OpenAI 兼容代理，把 `OPENAI_BASE_URL` 和 `OPENAI_MODEL` 换成该服务实际支持的值。多 key 时，把 `OPENAI_API_KEY` 换成：
+
+```text
+OPENAI_API_KEYS=key_1,key_2,key_3
+```
+
+不要把真实 key 写进 GitHub。Vercel 上应在 Environment Variables 里配置。
+
+完整报告（¥10 档）默认每天最多 150 次：
+
+```text
+QUOTA_FULL_DAILY_LIMIT=150
+QUOTA_TIME_ZONE=Asia/Shanghai
+```
+
+如果部署在 Vercel 并且可能有多个实例，必须配置一个共享计数存储，推荐 Upstash Redis REST：
+
+```text
+QUOTA_REDIS_REST_URL=你的 Upstash Redis REST URL
+QUOTA_REDIS_REST_TOKEN=你的 Upstash Redis REST token
+```
+
+不配置 Redis 时，系统会降级为内存计数，只适合本地开发或单实例测试；在 Vercel 多实例下不能准确限制全站每日次数。
 
 可选变量：
 

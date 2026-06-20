@@ -85,11 +85,17 @@ function extractJson(raw: string): unknown | undefined {
 // OpenAI 协议兼容 provider：可指向官方 OpenAI 或任意 OpenAI 协议代理（newapi/oneapi 等）。
 // 结构化输出走 json_object + schema 注入 + zod 校验 + 一次纠错重试，最大化跨代理/跨模型兼容性。
 class OpenAICompatProvider implements LlmProvider {
-  private client: OpenAI;
+  private clients: { client: OpenAI; inFlight: number; label: string }[];
   private model: string;
-  constructor(apiKey: string, baseURL: string, model: string) {
-    this.client = new OpenAI({ apiKey, baseURL });
+  private perKeyConcurrency: number;
+  constructor(apiKeys: string[], baseURL: string, model: string, perKeyConcurrency: number) {
+    this.clients = apiKeys.map((apiKey, i) => ({
+      client: new OpenAI({ apiKey, baseURL }),
+      inFlight: 0,
+      label: `key${i + 1}`,
+    }));
     this.model = model;
+    this.perKeyConcurrency = Math.max(1, Math.floor(perKeyConcurrency || 1));
   }
 
   async complete<T>(req: LlmRequest<T>): Promise<{ value: T; model: string }> {
@@ -136,22 +142,37 @@ class OpenAICompatProvider implements LlmProvider {
       response_format: { type: "json_object" },
       max_completion_tokens: maxTokens,
     };
+    const slot = await this.acquireClient();
     try {
-      return await this.client.chat.completions.create(base as never);
+      return await slot.client.chat.completions.create(base as never);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       // 代理/模型不认某些参数时逐项降级
       if (/response_format|json_object/i.test(msg)) {
         const { response_format, ...rest } = base;
         void response_format;
-        return await this.client.chat.completions.create(rest as never);
+        return await slot.client.chat.completions.create(rest as never);
       }
       if (/max_completion_tokens/i.test(msg)) {
         const { max_completion_tokens, ...rest } = base;
         void max_completion_tokens;
-        return await this.client.chat.completions.create({ ...rest, max_tokens: maxTokens } as never);
+        return await slot.client.chat.completions.create({ ...rest, max_tokens: maxTokens } as never);
       }
       throw e;
+    } finally {
+      slot.inFlight = Math.max(0, slot.inFlight - 1);
+    }
+  }
+
+  private async acquireClient(): Promise<{ client: OpenAI; inFlight: number; label: string }> {
+    while (true) {
+      const slot = [...this.clients].sort((a, b) => a.inFlight - b.inFlight)[0];
+      if (!slot) throw new Error("未配置 OpenAI API key");
+      if (slot.inFlight < this.perKeyConcurrency) {
+        slot.inFlight += 1;
+        return slot;
+      }
+      await new Promise((r) => setTimeout(r, 120));
     }
   }
 }
@@ -177,10 +198,11 @@ export function getLlm(): LlmProvider {
     }
     _provider = new AnthropicProvider(config.anthropicApiKey);
   } else if (config.provider === "openai") {
-    if (!config.openai.apiKey) {
-      throw new Error("LLM_PROVIDER=openai 但未设置 OPENAI_API_KEY");
+    const apiKeys = config.openai.apiKeys.length ? config.openai.apiKeys : config.openai.apiKey ? [config.openai.apiKey] : [];
+    if (apiKeys.length === 0) {
+      throw new Error("LLM_PROVIDER=openai 但未设置 OPENAI_API_KEY 或 OPENAI_API_KEYS");
     }
-    _provider = new OpenAICompatProvider(config.openai.apiKey, config.openai.baseURL, config.openai.model);
+    _provider = new OpenAICompatProvider(apiKeys, config.openai.baseURL, config.openai.model, config.openai.perKeyConcurrency);
   } else {
     _provider = new MockProvider();
   }

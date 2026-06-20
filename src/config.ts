@@ -15,6 +15,13 @@ function modelFor(envName: string, fallback: string): string {
   return process.env[envName] || fallback;
 }
 
+function listFromEnv(name: string): string[] {
+  return (process.env[name] ?? "")
+    .split(/[\n,，]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export const config = {
   provider: (process.env.LLM_PROVIDER ?? "mock") as "mock" | "anthropic" | "openai",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
@@ -22,8 +29,16 @@ export const config = {
   // OpenAI 兼容端点（可指向任意 OpenAI 协议代理，如 newapi/oneapi）
   openai: {
     apiKey: process.env.OPENAI_API_KEY ?? "",
+    apiKeys: listFromEnv("OPENAI_API_KEYS"),
     baseURL: openAiBaseUrl(process.env.OPENAI_BASE_URL),
     model: process.env.OPENAI_MODEL ?? "gpt-5.4-mini",
+    perKeyConcurrency: Number(process.env.OPENAI_PER_KEY_CONCURRENCY ?? 8),
+  },
+  quota: {
+    fullDailyLimit: Number(process.env.QUOTA_FULL_DAILY_LIMIT ?? 150),
+    timeZone: process.env.QUOTA_TIME_ZONE ?? "Asia/Shanghai",
+    redisRestUrl: process.env.QUOTA_REDIS_REST_URL ?? "",
+    redisRestToken: process.env.QUOTA_REDIS_REST_TOKEN ?? "",
   },
   // 联网检索（默认关）：开启后用一次检索为“市场拉动/新兴岗位”召回注入实时市场信号；失败自动降级为无检索。
   enableWebSearch: process.env.ENABLE_WEB_SEARCH === "true",

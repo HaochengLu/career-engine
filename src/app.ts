@@ -4,6 +4,7 @@ import path from "node:path";
 import { config } from "./config.js";
 import { nowIso } from "./util.js";
 import { generateReport } from "./core/pipeline.js";
+import { reserveReportQuota } from "./core/quota.js";
 import { renderReport, renderInsufficient, renderFailed } from "./render/report.js";
 import type { ImageInput } from "./providers/llm.js";
 import type { Tier, UserInputs, ReportMeta } from "./types.js";
@@ -62,6 +63,19 @@ app.post("/api/report/generate", upload.array("images", 4), async (req, res) => 
   }
 
   try {
+    const quota = await reserveReportQuota(tier);
+    if (!quota.allowed) {
+      res.status(429).set("Content-Type", "text/html; charset=utf-8");
+      return res.send(
+        renderFailed({
+          tier,
+          createdAt: nowIso(),
+          status: "failed",
+          error: `今天的完整报告名额已用完（${quota.used}/${quota.limit}）。请明天再试，或先使用快速版。`,
+        }),
+      );
+    }
+
     // 主动超时兜底：即使某个 worker 卡住，也在 Vercel 强杀前返回友好失败。
     const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("生成超时（请稍后重试或减少图片）")), GEN_TIMEOUT_MS));
     const result = await Promise.race([generateReport(images, inputs), timeout]);
