@@ -90,7 +90,7 @@ class OpenAICompatProvider implements LlmProvider {
   private perKeyConcurrency: number;
   constructor(apiKeys: string[], baseURL: string, model: string, perKeyConcurrency: number) {
     this.clients = apiKeys.map((apiKey, i) => ({
-      client: new OpenAI({ apiKey, baseURL }),
+      client: new OpenAI({ apiKey, baseURL, maxRetries: 0 }),
       inFlight: 0,
       label: `key${i + 1}`,
     }));

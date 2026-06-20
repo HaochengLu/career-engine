@@ -147,7 +147,8 @@ export async function generateReport(
     else artifacts.worker_log.push(meta("marketSignal(skipped)", "code", undefined, marketTimed.durationMs));
 
     // 4) 多通道召回候选职业本体（证据近 + 相邻迁移 + 市场拉动 + 用户意愿 + 新兴前沿）
-    const roleMode = tier === "trial" ? "fast" : "full";
+    // 上游代理有 120s read timeout；full 版也先用快速候选召回，再用并行 scout + full strategy/redTeam 保质量。
+    const roleMode = "fast" as const;
     const rolesPromise = timed(`synthesizeRoles(${roleMode})`, () =>
       synthesizeRoles(artifacts.capability_vector!, ev.value, inputs, market, { mode: roleMode }),
     );
