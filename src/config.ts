@@ -2,8 +2,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import weights from "./data/scoring_weights.json" with { type: "json" };
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const ROOT = path.resolve(__dirname, "..");
+function currentRoot(): string {
+  try {
+    return typeof import.meta.url === "string" ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..") : ".";
+  } catch {
+    return ".";
+  }
+}
+
+export const ROOT = currentRoot();
 
 type EnvMap = Record<string, string | undefined>;
 

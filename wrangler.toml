@@ -1,6 +1,6 @@
 name = "career-engine"
 main = "cloudflare/worker.ts"
-compatibility_date = "2026-06-21"
+compatibility_date = "2025-12-01"
 compatibility_flags = ["nodejs_compat"]
 
 [observability]
@@ -17,4 +17,4 @@ class_name = "QuotaCounter"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["QuotaCounter"]
+new_sqlite_classes = ["QuotaCounter"]

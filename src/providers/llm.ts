@@ -1,6 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import OpenAI from "openai";
 import { z, type ZodType } from "zod";
 import { config } from "../config.js";
 import { MOCK } from "./mock.js";
@@ -26,13 +23,24 @@ export interface LlmProvider {
 }
 
 class AnthropicProvider implements LlmProvider {
-  private client: Anthropic;
+  private clientPromise: Promise<unknown>;
   constructor(apiKey: string) {
-    this.client = new Anthropic({ apiKey });
+    this.clientPromise = (async () => {
+      const sdkName = "@anthropic-ai/sdk";
+      const mod = (await import(sdkName)) as { default: new (args: { apiKey: string }) => unknown };
+      return new mod.default({ apiKey });
+    })();
   }
 
   async complete<T>(req: LlmRequest<T>): Promise<{ value: T; model: string }> {
-    const content: Anthropic.ContentBlockParam[] = [];
+    const client = (await this.clientPromise) as {
+      messages: {
+        parse(args: Record<string, unknown>): Promise<{ parsed_output: unknown; stop_reason?: string; model: string }>;
+      };
+    };
+    const helperName = "@anthropic-ai/sdk/helpers/zod";
+    const { zodOutputFormat } = (await import(helperName)) as { zodOutputFormat(schema: ZodType<unknown>): unknown };
+    const content: Array<Record<string, unknown>> = [];
     for (const img of req.images ?? []) {
       content.push({
         type: "image",
@@ -41,13 +49,13 @@ class AnthropicProvider implements LlmProvider {
     }
     content.push({ type: "text", text: req.userText });
 
-    const response = await this.client.messages.parse({
+    const response = await client.messages.parse({
       model: req.model,
       max_tokens: req.maxTokens ?? 16000,
       thinking: { type: "adaptive" },
       ...(req.system ? { system: req.system } : {}),
       output_config: {
-        format: zodOutputFormat(req.schema),
+        format: zodOutputFormat(req.schema as ZodType<unknown>),
         effort: req.effort ?? "high",
       },
       messages: [{ role: "user", content }],
@@ -85,15 +93,17 @@ function extractJson(raw: string): unknown | undefined {
 // OpenAI 协议兼容 provider：可指向官方 OpenAI 或任意 OpenAI 协议代理（newapi/oneapi 等）。
 // 结构化输出走 json_object + schema 注入 + zod 校验 + 一次纠错重试，最大化跨代理/跨模型兼容性。
 class OpenAICompatProvider implements LlmProvider {
-  private clients: { client: OpenAI; inFlight: number; label: string }[];
+  private clients: { apiKey: string; inFlight: number; label: string }[];
+  private baseURL: string;
   private model: string;
   private perKeyConcurrency: number;
   constructor(apiKeys: string[], baseURL: string, model: string, perKeyConcurrency: number) {
     this.clients = apiKeys.map((apiKey, i) => ({
-      client: new OpenAI({ apiKey, baseURL, maxRetries: 0 }),
+      apiKey,
       inFlight: 0,
       label: `key${i + 1}`,
     }));
+    this.baseURL = baseURL.replace(/\/+$/, "");
     this.model = model;
     this.perKeyConcurrency = Math.max(1, Math.floor(perKeyConcurrency || 1));
   }
@@ -144,19 +154,19 @@ class OpenAICompatProvider implements LlmProvider {
     };
     const slot = await this.acquireClient();
     try {
-      return await slot.client.chat.completions.create(base as never);
+      return await this.postChatCompletion(slot.apiKey, base);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       // 代理/模型不认某些参数时逐项降级
       if (/response_format|json_object/i.test(msg)) {
         const { response_format, ...rest } = base;
         void response_format;
-        return await slot.client.chat.completions.create(rest as never);
+        return await this.postChatCompletion(slot.apiKey, rest);
       }
       if (/max_completion_tokens/i.test(msg)) {
         const { max_completion_tokens, ...rest } = base;
         void max_completion_tokens;
-        return await slot.client.chat.completions.create({ ...rest, max_tokens: maxTokens } as never);
+        return await this.postChatCompletion(slot.apiKey, { ...rest, max_tokens: maxTokens });
       }
       throw e;
     } finally {
@@ -164,7 +174,27 @@ class OpenAICompatProvider implements LlmProvider {
     }
   }
 
-  private async acquireClient(): Promise<{ client: OpenAI; inFlight: number; label: string }> {
+  private async postChatCompletion(apiKey: string, body: Record<string, unknown>): Promise<{ choices?: Array<{ message?: { content?: string } }>; model?: string }> {
+    const res = await fetch(`${this.baseURL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`OpenAI compatible API failed: ${res.status} ${text.slice(0, 800)}`);
+    }
+    try {
+      return JSON.parse(text) as { choices?: Array<{ message?: { content?: string } }>; model?: string };
+    } catch {
+      throw new Error(`OpenAI compatible API returned non-JSON response: ${text.slice(0, 800)}`);
+    }
+  }
+
+  private async acquireClient(): Promise<{ apiKey: string; inFlight: number; label: string }> {
     while (true) {
       const slot = [...this.clients].sort((a, b) => a.inFlight - b.inFlight)[0];
       if (!slot) throw new Error("未配置 OpenAI API key");
