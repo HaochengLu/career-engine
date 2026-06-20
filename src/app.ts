@@ -16,11 +16,11 @@ app.use(express.static(config.paths.publicDir));
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 3 * 1024 * 1024, files: 4 }, // 3MB×4：控制 base64 体积与 LLM 输入成本
+  limits: { fileSize: 2 * 1024 * 1024, files: 4 }, // 前端会压缩；后端继续限制体积，避免 Vercel 与 LLM 输入过载
 });
 
 const GEN_TIMEOUT_MS = 280_000; // 留在 Vercel maxDuration(300s) 之内主动兜底，避免被强杀
-const MAX_TOTAL_B64 = 8 * 1024 * 1024; // 所有图片 base64 合计上限
+const MAX_TOTAL_B64 = 6 * 1024 * 1024; // 所有图片 base64 合计上限
 
 function splitList(v: unknown): string[] {
   if (typeof v !== "string" || !v.trim()) return [];
@@ -93,5 +93,27 @@ app.post("/api/report/generate", upload.array("images", 4), async (req, res) => 
 
 app.get("/healthz", (_req, res) => res.json({ ok: true, provider: config.provider }));
 app.get("/", (_req, res) => res.sendFile(path.join(config.paths.publicDir, "index.html")));
+
+app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (res.headersSent) return next(err);
+
+  const tier: Tier = req.body?.tier === "full" ? "full" : "trial";
+  let status = 500;
+  let error = "上传失败，请稍后重试。";
+
+  if (err instanceof multer.MulterError) {
+    status = 413;
+    error =
+      err.code === "LIMIT_FILE_SIZE"
+        ? "单张图片过大，请裁剪截图或换成更小的 JPG/PNG 后重试。"
+        : "图片上传失败，请最多上传 4 张截图，并尽量保留最关键的页面。";
+  } else if (err instanceof Error) {
+    error = err.message;
+  }
+
+  console.error("[upload:error]", err);
+  res.status(status).set("Content-Type", "text/html; charset=utf-8");
+  return res.send(renderFailed({ tier, createdAt: nowIso(), status: "failed", error }));
+});
 
 export default app;

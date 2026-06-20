@@ -33,7 +33,7 @@ legend{font-size:13px;color:var(--muted);padding:0 6px}
     <div class="card">
       <label>简历截图</label>
       <input type="file" name="images" accept="image/*" multiple />
-      <p class="hint">可以上传手机截图，最多 4 张。建议先遮住手机号、邮箱、身份证号等隐私信息；服务不会存储你的简历和报告。</p>
+      <p class="hint">可以上传手机截图，最多 4 张；提交前会自动压缩，避免大图导致生成失败。建议先遮住手机号、邮箱、身份证号等隐私信息；服务不会存储你的简历和报告。</p>
 
       <label>选择报告版本</label>
       <select name="tier">
@@ -74,19 +74,117 @@ legend{font-size:13px;color:var(--muted);padding:0 6px}
 const f = document.getElementById('f');
 const btn = document.getElementById('btn');
 const msg = document.getElementById('msg');
+const MAX_IMAGES = 4;
+const MAX_UPLOAD_BYTES = 3.8 * 1024 * 1024;
+const IMAGE_PROFILES = [
+  { maxSide: 1600, quality: 0.82 },
+  { maxSide: 1300, quality: 0.74 },
+  { maxSide: 1050, quality: 0.68 },
+];
+
+function showStatus(text) {
+  msg.style.display = 'block';
+  msg.textContent = text;
+}
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('有一张图片无法读取，请换成 JPG/PNG 截图后重试。'));
+    };
+    img.src = url;
+  });
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('图片压缩失败，请换一张截图后重试。'));
+    }, type, quality);
+  });
+}
+
+async function compressImage(file, index, profile) {
+  const img = await loadImage(file);
+  const width = img.naturalWidth || img.width;
+  const height = img.naturalHeight || img.height;
+  const scale = Math.min(1, profile.maxSide / Math.max(width, height));
+  const targetWidth = Math.max(1, Math.round(width * scale));
+  const targetHeight = Math.max(1, Math.round(height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+  const blob = await canvasToBlob(canvas, 'image/jpeg', profile.quality);
+  const baseName = (file.name || `resume-${index + 1}`).replace(/\.[^.]+$/, '');
+  return { blob, filename: `${baseName}.jpg` };
+}
+
+async function buildPayload(form) {
+  const data = new FormData(form);
+  data.delete('images');
+
+  const imageInput = form.querySelector('input[name="images"]');
+  const files = Array.from((imageInput && imageInput.files) || []);
+  if (files.length > MAX_IMAGES) {
+    throw new Error('最多只能上传 4 张图片，请删掉多余的截图。');
+  }
+  if (!files.length) return data;
+
+  for (const [profileIndex, profile] of IMAGE_PROFILES.entries()) {
+    let totalBytes = 0;
+    const compressed = [];
+    for (const [index, file] of files.entries()) {
+      showStatus(`正在压缩第 ${index + 1}/${files.length} 张截图，然后生成报告。`);
+      const image = await compressImage(file, index, profile);
+      totalBytes += image.blob.size;
+      compressed.push(image);
+    }
+    if (totalBytes <= MAX_UPLOAD_BYTES) {
+      for (const image of compressed) data.append('images', image.blob, image.filename);
+      return data;
+    }
+    if (profileIndex < IMAGE_PROFILES.length - 1) {
+      showStatus('截图还是偏大，正在进一步压缩。');
+    }
+  }
+
+  throw new Error('截图压缩后仍然偏大，请减少张数、裁剪截图，或只上传最关键的页面。');
+}
+
+function normalizeError(err) {
+  const text = err && err.message ? err.message : String(err);
+  if (text.includes('Failed to fetch')) {
+    return '请求没有到达服务器，通常是图片太大或网络中断。请减少截图张数、裁剪图片后重试。';
+  }
+  return text;
+}
+
 f.addEventListener('submit', async (e) => {
   e.preventDefault();
   btn.disabled = true; btn.textContent = '生成中…';
-  msg.style.display = 'block';
-  msg.textContent = '正在阅读简历并生成报告，通常需要 1-3 分钟。请先不要关闭页面。';
+  showStatus('正在准备材料，图片会先自动压缩。请先不要关闭页面。');
   try {
-    const res = await fetch('/api/report/generate', { method: 'POST', body: new FormData(f) });
+    const body = await buildPayload(f);
+    showStatus('正在阅读简历并生成报告，通常需要 1-3 分钟。请先不要关闭页面。');
+    const res = await fetch('/api/report/generate', { method: 'POST', body });
     const html = await res.text();
     if (!res.ok && !html) throw new Error('生成失败（' + res.status + '）');
     // 直接把返回的报告 HTML 渲染到当前页（不存盘、不跳转）
     document.open(); document.write(html); document.close();
   } catch (err) {
-    msg.textContent = '出错了：' + (err && err.message ? err.message : err);
+    msg.textContent = '出错了：' + normalizeError(err);
     btn.disabled = false; btn.textContent = '重试';
   }
 });
