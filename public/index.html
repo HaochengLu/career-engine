@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="robots" content="noindex,nofollow" />
-<title>职业画像报告 · 上传简历</title>
+<title>职业方向报告 · 上传简历</title>
 <style>
 :root{--bg:#faf8f3;--ink:#1f2328;--muted:#6b7280;--line:#e7e3da;--accent:#b4532a}
 *{box-sizing:border-box}
@@ -26,46 +26,46 @@ legend{font-size:13px;color:var(--muted);padding:0 6px}
 </head>
 <body>
 <div class="wrap">
-  <h1>别再盲投</h1>
-  <p class="sub">上传简历截图，生成一份「你现在最像哪类候选人、最该冲哪条路径、缺什么证据、最短怎么补」的职业画像报告。</p>
+  <h1>找到更适合你的职业方向</h1>
+  <p class="sub">上传简历截图，生成一份中文报告：现在适合投什么、哪些方向暂时不建议、还缺什么证据、接下来 30 天怎么补。</p>
 
   <form id="f">
     <div class="card">
-      <label>简历截图（可多张，支持手机截图）</label>
+      <label>简历截图</label>
       <input type="file" name="images" accept="image/*" multiple />
-      <p class="hint">建议把手机号、邮箱、身份证号等先打码再上传。本服务不存储你的简历与报告。</p>
+      <p class="hint">可以上传手机截图，最多 4 张。建议先遮住手机号、邮箱、身份证号等隐私信息；服务不会存储你的简历和报告。</p>
 
-      <label>报告档位</label>
+      <label>选择报告版本</label>
       <select name="tier">
-        <option value="trial">初版（¥1 · 精简）</option>
-        <option value="full">完整报告（¥10 · 全套）</option>
+        <option value="trial">快速版（¥1，先看大方向）</option>
+        <option value="full">完整报告（¥10，包含路径、缺口和行动建议）</option>
       </select>
-      <p class="hint">付款全凭自觉，报告底部有微信收款码；不付也能看。</p>
+      <p class="hint">付款全凭自觉，报告生成后会显示收款码；不付款也能查看结果。</p>
     </div>
 
     <fieldset>
-      <legend>补充信息（可选，填了更准）</legend>
+      <legend>补充信息（可选，填一点会更准）</legend>
       <div class="row">
-        <div><label>学校</label><input name="school" /></div>
-        <div><label>专业</label><input name="major" /></div>
+        <div><label>学校或机构</label><input name="school" placeholder="如 北京某大学 / 某培训营" /></div>
+        <div><label>专业或背景</label><input name="major" placeholder="如 计算机 / 市场营销 / 护理" /></div>
       </div>
       <div class="row">
-        <div><label>年级 / 工作年限</label><input name="grade_or_years" placeholder="如 大四 / 工作3年" /></div>
-        <div><label>目标城市</label><input name="target_locations" placeholder="逗号分隔" /></div>
+        <div><label>你现在的阶段</label><input name="grade_or_years" placeholder="如 大四 / 刚毕业 / 工作 3 年" /></div>
+        <div><label>想去的城市</label><input name="target_locations" placeholder="如 上海, 深圳, 远程" /></div>
       </div>
-      <label>想冲的方向</label><input name="desired_roles" placeholder="如 AI产品, 数据分析（逗号分隔）" />
-      <label>明确不想做的方向</label><input name="avoid_roles" placeholder="如 纯销售（逗号分隔）" />
-      <label>你的取向（影响路径排序）</label>
+      <label>你想尝试的工作方向</label><input name="desired_roles" placeholder="如 产品经理, 数据分析, 运营, 教师" />
+      <label>你不想做的方向</label><input name="avoid_roles" placeholder="如 纯销售, 高强度出差, 纯写代码" />
+      <label>你更在意什么</label>
       <select name="declared_goal">
-        <option value="balance">均衡</option>
-        <option value="stable">求稳：先拿到现实 offer</option>
-        <option value="upside">求上限：更看重未来天花板</option>
+        <option value="balance">均衡：现实机会和长期发展都要看</option>
+        <option value="stable">先求稳：优先找到更现实的机会</option>
+        <option value="upside">看上限：愿意补能力，换更高天花板</option>
       </select>
-      <label>硬约束</label><input name="constraints" placeholder="如 需要签证, 愿意补作品集（逗号分隔）" />
-      <label>其它想让系统知道的</label><textarea name="notes" rows="2"></textarea>
+      <label>必须考虑的限制</label><input name="constraints" placeholder="如 需要签证, 不能加班太多, 预算有限, 愿意补作品集" />
+      <label>其它想补充的话</label><textarea name="notes" rows="2" placeholder="如 我想转行但不知道从哪里开始，或者我更看重稳定。"></textarea>
     </fieldset>
 
-    <button class="btn" id="btn" type="submit">生成我的职业画像</button>
+    <button class="btn" id="btn" type="submit">生成我的职业方向报告</button>
     <div id="msg" class="notice" style="display:none"></div>
   </form>
 </div>
@@ -78,7 +78,7 @@ f.addEventListener('submit', async (e) => {
   e.preventDefault();
   btn.disabled = true; btn.textContent = '生成中…';
   msg.style.display = 'block';
-  msg.textContent = '正在解析简历、拆解证据、合成职业路径并做对抗审查…（约 1-3 分钟，请勿关闭页面）';
+  msg.textContent = '正在阅读简历并生成报告，通常需要 1-3 分钟。请先不要关闭页面。';
   try {
     const res = await fetch('/api/report/generate', { method: 'POST', body: new FormData(f) });
     const html = await res.text();

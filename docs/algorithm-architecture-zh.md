@@ -366,90 +366,62 @@ QA 检查：
 
 ## 6. 模型选择建议
 
-本节是截至 2026-06-20 的建议。模型能力和价格会变化，正式上线前建议用 30-50 份真实简历样本做小规模 A/B eval。
+本节是截至 2026-06-20 的建议。当前部署优先使用 OpenAI 兼容接口；本项目已验证目标端点支持 `gpt-5.5`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-4.1-mini` 等模型。模型能力和价格会变化，正式上线前建议用 30-50 份真实简历样本做小规模 A/B eval。
 
 官方参考：
 
-- Anthropic Claude 模型说明：https://platform.claude.com/docs/en/about-claude/models/overview
 - OpenAI 模型说明：https://platform.openai.com/docs/models
 - OpenAI GPT-5.5 迁移与提示建议：https://platform.openai.com/docs/guides/latest-model
 
-Anthropic 当前可选重点：
+### 6.1 生产默认配置
 
-- `claude-fable-5`：能力最强，适合最高质量但成本/时延更高的场景。
-- `claude-opus-4-8`：复杂推理、长上下文、策略判断强，适合关键 worker。
-- `claude-sonnet-4-6`：速度和能力平衡最好，适合生产默认。
-- `claude-haiku-4-5`：最快、便宜，适合低风险抽取或兜底。
+这套配置把 `gpt-5.5` 留给最影响报告质量的环节，把 `gpt-5.4` 用在视觉解析和查漏，兼顾效果、成本和 Vercel 300 秒函数时长。
 
-OpenAI 当前可选重点：
-
-- `gpt-5.5`：适合复杂多步推理、工具使用、严格输出和最高质量工作流。
-- `gpt-5.5` 低/中 reasoning effort：适合需要兼顾质量和时延的生产路径。
-- OpenAI Responses API 的 `web_search`：适合 marketSignal 这类可选联网检索。
-
-### 6.1 最佳质量配置
-
-适合：少量高价值用户、可接受 1-3 分钟等待、报告质量优先。
-
-| 环节 | 推荐模型 | 原因 |
+| 环节 | 默认模型 | 原因 |
 | --- | --- | --- |
-| parseResume | `claude-opus-4-8` 或 `gpt-5.5` | 需要看图、读简历、保守处理 OCR 不确定性 |
-| extractEvidence | `claude-opus-4-8` 或 `gpt-5.5` high effort | 证据拆分和强度评级是全链路地基，宁可多花成本 |
-| synthesizeRoles | `claude-opus-4-8` / `claude-fable-5` / `gpt-5.5` high | 需要开放世界职业合成、多通道召回、硬门槛判断 |
-| opportunityScout | `claude-opus-4-8` 或 `gpt-5.5` high | 专门防漏高上限方向，错漏会显著影响产品价值 |
-| strategy | `claude-opus-4-8` / `claude-fable-5` / `gpt-5.5` high | 需要判断、取舍、中文表达和可执行建议 |
-| redTeam | `claude-opus-4-8` / `claude-fable-5` / `gpt-5.5` high | 需要强反驳、证据蕴含判断和安全保守性 |
-| marketSignal | OpenAI Responses API + web_search | 这是检索能力，不应让主策略模型凭静态知识猜市场 |
+| parseResume | `gpt-5.4` | 需要读图片、识别简历结构、保守处理低置信 OCR；`gpt-5.4` 速度和视觉理解更适合作为入口 |
+| extractEvidence | `gpt-5.5` | 证据拆分和强度评级是全链路地基，错了会污染后续 |
+| synthesizeRoles | `gpt-5.5` | 需要开放世界职业本体合成、多通道召回、硬门槛意识 |
+| opportunityScout | `gpt-5.4` | 条件触发的查漏环节，重点是补高上限相邻方向，用 `gpt-5.4` 控制时延 |
+| strategy | `gpt-5.5` | 最终用户读到的报告，需要判断、取舍、中文表达和行动建议 |
+| redTeam | `gpt-5.5` | 需要强反驳、证据蕴含检查和安全保守性 |
+| marketSignal | `gpt-5.4-mini` 或关闭 | 只提供市场上下文，失败会自动降级；默认不让市场搜索影响主流程稳定性 |
 | capabilityVector / scoreRoles / arbitrate / qa | 代码 | 必须确定性、可复现、可审计 |
 
-### 6.2 生产平衡配置
+对应环境变量：
 
-适合：给朋友或早期用户使用，控制成本和 300 秒 Vercel 函数时长。
-
-| 环节 | 推荐模型 | 原因 |
-| --- | --- | --- |
-| parseResume | `claude-sonnet-4-6` 或 `gpt-5.5` medium | 视觉理解要稳，但不一定需要最强模型 |
-| extractEvidence | `claude-opus-4-8` 或 `gpt-5.5` high | 证据评级是最关键瓶颈，建议保留强模型 |
-| synthesizeRoles | `claude-sonnet-4-6` 或 `gpt-5.5` medium/high | 职业本体合成复杂，但可用 Sonnet 平衡时延 |
-| opportunityScout | `claude-sonnet-4-6` | 条件触发，主要做查漏补缺 |
-| strategy | `claude-opus-4-8` 或 `gpt-5.5` high | 最终用户感知最强，建议用强模型 |
-| redTeam | `claude-sonnet-4-6` 或 `gpt-5.5` medium | 审查能力重要，但可用平衡模型控制成本 |
-| marketSignal | `gpt-5.5` 或专门检索模型 + web_search | 只提供市场上下文，失败自动降级 |
-| deterministic stages | 代码 | 不用模型 |
-
-推荐默认：
-
-```text
-parseResume       = claude-sonnet-4-6
-extractEvidence   = claude-opus-4-8
-synthesizeRoles   = claude-sonnet-4-6
-opportunityScout  = claude-sonnet-4-6
-strategy          = claude-opus-4-8
-redTeam           = claude-sonnet-4-6
+```env
+LLM_PROVIDER=openai
+OPENAI_BASE_URL=https://api.xgapi.top/v1
+OPENAI_MODEL=gpt-5.4-mini
+WORKER_MODEL_PARSE_RESUME=gpt-5.4
+WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
+WORKER_MODEL_SYNTHESIZE_ROLES=gpt-5.5
+WORKER_MODEL_OPPORTUNITY_SCOUT=gpt-5.4
+WORKER_MODEL_STRATEGY=gpt-5.5
+WORKER_MODEL_RED_TEAM=gpt-5.5
 ```
 
-这套比“全部 Opus”便宜快很多，同时把强模型留给最影响质量的两个环节：证据评级和最终策略。
-
-### 6.3 低成本配置
+### 6.2 低成本配置
 
 适合：演示、低频试用、Hobby 项目、或者先验证产品需求。
 
 | 环节 | 推荐模型 | 风险 |
 | --- | --- | --- |
-| parseResume | `claude-haiku-4-5` | 模糊图和复杂排版可能漏信息 |
-| extractEvidence | `claude-sonnet-4-6` | 不建议用 Haiku，证据评级错会污染后续 |
-| synthesizeRoles | `claude-sonnet-4-6` | 基本可用 |
-| opportunityScout | `claude-haiku-4-5` 或跳过 | 可能漏高上限相邻方向 |
-| strategy | `claude-sonnet-4-6` | 中文报告质量低于 Opus/Fable/GPT-5.5 |
-| redTeam | `claude-sonnet-4-6` | 不建议用太弱模型做安全审查 |
+| parseResume | `gpt-5.4-mini` | 模糊图和复杂排版可能漏信息 |
+| extractEvidence | `gpt-5.4` | 不建议降到 nano/mini 以下，证据评级错会污染后续 |
+| synthesizeRoles | `gpt-5.4` | 基本可用，但新兴/跨行业方向可能变保守 |
+| opportunityScout | `gpt-5.4-mini` 或跳过 | 可能漏高上限相邻方向 |
+| strategy | `gpt-5.4` | 报告质量低于 `gpt-5.5` |
+| redTeam | `gpt-5.4` | 不建议用太弱模型做安全审查 |
 
 低成本配置不建议把所有 worker 都换成最快模型。最小保留原则：
 
-- `extractEvidence` 至少用 Sonnet 级别。
-- `strategy` 至少用 Sonnet 级别。
-- `redTeam` 至少用 Sonnet 级别。
+- `extractEvidence` 至少用 `gpt-5.4`。
+- `strategy` 至少用 `gpt-5.4`。
+- `redTeam` 至少用 `gpt-5.4`。
 
-### 6.4 不同环节为什么需要不同模型
+### 6.3 不同环节为什么需要不同模型
 
 | 环节 | 主要难点 | 模型能力优先级 |
 | --- | --- | --- |
@@ -467,16 +439,16 @@ redTeam           = claude-sonnet-4-6
 
 ```ts
 export const workerModels: Record<string, string> = {
-  parseResume: config.defaultModel,
-  extractEvidence: config.defaultModel,
-  synthesizeRoles: config.defaultModel,
-  opportunityScout: config.defaultModel,
-  strategy: config.defaultModel,
-  redTeam: config.defaultModel,
+  parseResume: process.env.WORKER_MODEL_PARSE_RESUME || "gpt-5.4",
+  extractEvidence: process.env.WORKER_MODEL_EXTRACT_EVIDENCE || "gpt-5.5",
+  synthesizeRoles: process.env.WORKER_MODEL_SYNTHESIZE_ROLES || "gpt-5.5",
+  opportunityScout: process.env.WORKER_MODEL_OPPORTUNITY_SCOUT || "gpt-5.4",
+  strategy: process.env.WORKER_MODEL_STRATEGY || "gpt-5.5",
+  redTeam: process.env.WORKER_MODEL_RED_TEAM || "gpt-5.5",
 };
 ```
 
-当前所有 worker 默认走 `DEFAULT_MODEL`。如果要按上面的生产平衡配置上线，可以只改这里，不改业务逻辑。
+每个 worker 都可以通过环境变量独立换模型，不需要改业务逻辑。
 
 运行时通过环境变量选择 provider：
 
@@ -486,6 +458,12 @@ ANTHROPIC_API_KEY=...
 OPENAI_API_KEY=...
 OPENAI_BASE_URL=...
 OPENAI_MODEL=...
+WORKER_MODEL_PARSE_RESUME=...
+WORKER_MODEL_EXTRACT_EVIDENCE=...
+WORKER_MODEL_SYNTHESIZE_ROLES=...
+WORKER_MODEL_OPPORTUNITY_SCOUT=...
+WORKER_MODEL_STRATEGY=...
+WORKER_MODEL_RED_TEAM=...
 ENABLE_WEB_SEARCH=false
 ```
 

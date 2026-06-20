@@ -106,15 +106,16 @@ class OpenAICompatProvider implements LlmProvider {
       { role: "system", content: sys },
       { role: "user", content: userContent },
     ];
+    const model = req.model || this.model;
 
     let lastErr = "";
     for (let attempt = 0; attempt < 2; attempt++) {
-      const resp = await this.create(messages, req.maxTokens ?? 16000);
+      const resp = await this.create(messages, req.maxTokens ?? 16000, model);
       const raw = resp.choices?.[0]?.message?.content ?? "";
       const parsed = extractJson(raw);
       if (parsed !== undefined) {
         const r = req.schema.safeParse(parsed);
-        if (r.success) return { value: r.data, model: resp.model ?? this.model };
+        if (r.success) return { value: r.data, model: resp.model ?? model };
         lastErr = r.error.message;
       } else {
         lastErr = "返回不是合法 JSON";
@@ -128,9 +129,9 @@ class OpenAICompatProvider implements LlmProvider {
     throw new Error(`OpenAI 结构化输出失败（${req.schemaName}）：${lastErr}`);
   }
 
-  private async create(messages: Array<Record<string, unknown>>, maxTokens: number) {
+  private async create(messages: Array<Record<string, unknown>>, maxTokens: number, model: string) {
     const base: Record<string, unknown> = {
-      model: this.model,
+      model,
       messages,
       response_format: { type: "json_object" },
       max_completion_tokens: maxTokens,
