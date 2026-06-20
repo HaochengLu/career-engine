@@ -392,7 +392,7 @@ QA 检查：
 
 ```env
 LLM_PROVIDER=openai
-OPENAI_BASE_URL=https://api.xgapi.top/v1
+OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-5.4-mini
 WORKER_MODEL_PARSE_RESUME=gpt-5.4
 WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
@@ -401,6 +401,8 @@ WORKER_MODEL_OPPORTUNITY_SCOUT=gpt-5.4
 WORKER_MODEL_STRATEGY=gpt-5.5
 WORKER_MODEL_RED_TEAM=gpt-5.5
 ```
+
+如果使用 OpenAI 兼容网关，把 `OPENAI_BASE_URL` 换成自己的兼容端点，例如 `https://your-openai-compatible-endpoint/v1`。
 
 ### 6.2 低成本配置
 
