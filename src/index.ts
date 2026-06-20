@@ -1,4 +1,5 @@
 // 本地开发入口：启动 HTTP 服务。Vercel 部署走 api/index.ts。
+import "dotenv/config";
 import { app } from "./app.js";
 import { config } from "./config.js";
 

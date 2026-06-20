@@ -1,6 +1,20 @@
 name = "career-engine"
-main = "cloudflare/worker.js"
-compatibility_date = "2025-12-01"
+main = "cloudflare/worker.ts"
+compatibility_date = "2026-06-21"
+compatibility_flags = ["nodejs_compat"]
 
 [observability]
 enabled = true
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*", "/healthz", "/cloudflare-healthz"]
+
+[[durable_objects.bindings]]
+name = "QUOTA_DO"
+class_name = "QuotaCounter"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["QuotaCounter"]

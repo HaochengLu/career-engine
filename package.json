@@ -8,6 +8,8 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
+    "cf:build": "esbuild cloudflare/worker.ts --bundle --format=esm --platform=neutral --target=es2022 --external:node:* --main-fields=module,main --minify --outfile=dist/cloudflare-worker.js",
+    "cf:deploy": "npm run cf:build && wrangler deploy",
     "eval": "tsx evals/run.ts"
   },
   "dependencies": {
@@ -22,6 +24,7 @@
     "@types/express": "^4.17.21",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.5",
+    "esbuild": "^0.28.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }

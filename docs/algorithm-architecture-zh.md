@@ -2,7 +2,7 @@
 
 本文说明 Career Engine 的产品功能、算法路线、核心流水线、每个环节的模型选择建议，以及上线部署时需要注意的安全边界。
 
-更新时间：2026-06-20
+更新时间：2026-06-21
 
 ## 1. 产品做什么
 
@@ -20,7 +20,7 @@ Career Engine 是一个“基于职业证据”的职业画像报告引擎。
 - 不做账号系统。
 - 不存简历、不落数据库。
 - 不做支付校验，只在报告底部展示收款码。
-- 一个请求内同步跑完整条流水线，适合部署到 Vercel Serverless Function。
+- 一个请求内同步跑完整条流水线，可部署到 Cloudflare Workers、Vercel Serverless Function，或普通 Node 服务。
 
 ## 2. 第一性原理
 
@@ -375,7 +375,7 @@ QA 检查：
 
 ### 6.1 生产默认配置
 
-这套配置把 `gpt-5.5` 留给最影响报告质量的环节，把 `gpt-5.4` 用在视觉解析和查漏，兼顾效果、成本和 Vercel 300 秒函数时长。
+这套配置把 `gpt-5.5` 留给最影响报告质量的环节，把 `gpt-5.4` 用在视觉解析和查漏，兼顾效果、成本和同步请求时长。
 
 | 环节 | 默认模型 | 原因 |
 | --- | --- | --- |
@@ -402,7 +402,7 @@ WORKER_MODEL_STRATEGY=gpt-5.5
 WORKER_MODEL_RED_TEAM=gpt-5.5
 ```
 
-如果使用官方 OpenAI 或第三方/自建兼容网关，只在 `.env`、Vercel Environment Variables、服务器 secret manager 里填写真实 base URL；公开文档和 GitHub 提交里不要写私有网关域名。
+如果使用官方 OpenAI 或第三方/自建兼容网关，只在 `.env`、Cloudflare Secrets、Vercel Environment Variables 或服务器 secret manager 里填写真实 base URL；公开文档和 GitHub 提交里不要写私有网关域名。
 
 ### 6.2 低成本配置
 
@@ -437,17 +437,17 @@ WORKER_MODEL_RED_TEAM=gpt-5.5
 
 ## 7. 当前代码模型配置方式
 
-模型配置集中在 `src/config.ts`：
+模型配置集中在 `src/config.ts`。本地 Node 从 `process.env` 读取，Cloudflare Worker 会在请求进入时把 Worker bindings 注入同一套配置读取函数，所以业务 worker 不需要关心部署平台：
 
 ```ts
-export const workerModels: Record<string, string> = {
-  parseResume: process.env.WORKER_MODEL_PARSE_RESUME || "gpt-5.4",
-  extractEvidence: process.env.WORKER_MODEL_EXTRACT_EVIDENCE || "gpt-5.5",
-  synthesizeRoles: process.env.WORKER_MODEL_SYNTHESIZE_ROLES || "gpt-5.5",
-  opportunityScout: process.env.WORKER_MODEL_OPPORTUNITY_SCOUT || "gpt-5.4",
-  strategy: process.env.WORKER_MODEL_STRATEGY || "gpt-5.5",
-  redTeam: process.env.WORKER_MODEL_RED_TEAM || "gpt-5.5",
-};
+WORKER_MODEL_PARSE_RESUME=gpt-5.4
+WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
+WORKER_MODEL_SYNTHESIZE_ROLES_FAST=gpt-5.4-mini
+WORKER_MODEL_SYNTHESIZE_ROLES=gpt-5.5
+WORKER_MODEL_OPPORTUNITY_SCOUT=gpt-5.4
+WORKER_MODEL_STRATEGY_FAST=gpt-5.4-mini
+WORKER_MODEL_STRATEGY=gpt-5.5
+WORKER_MODEL_RED_TEAM=gpt-5.5
 ```
 
 每个 worker 都可以通过环境变量独立换模型，不需要改业务逻辑。
@@ -472,12 +472,12 @@ ENABLE_WEB_SEARCH=false
 注意：
 
 - `.env` 只用于本地，不应提交。
-- Vercel 上应在 Dashboard 的 Environment Variables 里配置 key。
+- Cloudflare 上应使用 Worker Secrets；Vercel 上应使用 Dashboard 的 Environment Variables。
 - `.env.example` 可以提交，因为它不包含真实 key。
 
 ## 8. 部署结构
 
-项目适合直接把仓库根目录设为 `career-engine/`。
+项目适合直接把仓库根目录设为 `career-engine/`。当前推荐 Cloudflare Workers 部署：静态页面、API、每日额度计数都在 Cloudflare 上运行，不需要再反代 Vercel。
 
 关键文件：
 
@@ -486,11 +486,21 @@ ENABLE_WEB_SEARCH=false
 | `public/index.html` | 上传页 |
 | `public/pay-*.png` | 收款码图片 |
 | `src/app.ts` | Express app 和 API route |
+| `cloudflare/worker.ts` | Cloudflare Worker 原生入口 |
+| `wrangler.toml` | Cloudflare Static Assets、Durable Object、Worker 配置 |
 | `api/index.ts` | Vercel Serverless 入口 |
 | `vercel.json` | Vercel 函数时长和 rewrite |
 | `src/core/pipeline.ts` | 主流水线 |
 | `src/workers/*` | 各 worker |
 | `src/data/*.json` | 能力维度、职业 seed、评分权重 |
+
+Cloudflare 结构：
+
+```text
+public/*              -> Cloudflare Static Assets
+cloudflare/worker.ts  -> /api/report/generate、/healthz
+QUOTA_DO              -> Durable Object，每日完整报告额度计数
+```
 
 Vercel 结构：
 
@@ -504,6 +514,7 @@ vercel.json      -> /(.*) rewrite 到 /api
 
 - `vercel.json` 已设置 `maxDuration: 300`。
 - 应用内部还有 `GEN_TIMEOUT_MS = 280_000`，会在 Vercel 强杀前主动返回友好失败。
+- Cloudflare 部署建议把 `GEN_TIMEOUT_MS` 设为 `760000`，但第三方模型代理自身如果有 120 秒 read timeout，平台迁移不能消除这个上游限制，只能靠模型选择、图片压缩、并行 worker 和重试策略降低触发概率。
 
 ## 9. 安全与隐私边界
 
@@ -519,7 +530,7 @@ vercel.json      -> /(.*) rewrite 到 /api
 
 - 不提交 `.env`。
 - 不提交真实 API key。
-- Vercel 环境变量只放在 Dashboard。
+- Cloudflare/Vercel/服务器环境变量只放在部署平台的 secret 或环境变量管理里。
 - 如果仓库公开，`public/pay-*.png` 收款码会公开。
 - 不要把用户真实简历样本放进仓库。
 
@@ -529,5 +540,5 @@ vercel.json      -> /(.*) rewrite 到 /api
 2. 接入 O*NET / ESCO 作为职业本体锚点，减少完全靠模型合成的不确定性。
 3. 做公平性回归集，例如同样成果挂名校和普通学校，分数漂移不能超过阈值。
 4. 引入线上反馈，但不要直接训练黑箱权重；优先把失败样本转成可解释规则和反例集。
-5. 把大模型调用改为流式或异步任务，降低 Vercel 同步请求超时风险。
+5. 把大模型调用改为流式或异步任务，降低同步请求超时风险。
 6. 对模型配置做 A/B eval，按真实样本比较证据评级一致性、路径命中率、Red Team 召回率和用户满意度。

@@ -6,13 +6,13 @@ Career Engine 是一个轻量的职业规划小工具：用户上传简历截图
 
 - **正在找工作的人**：想快速知道自己的简历更适合投哪些岗位。
 - **学生或转型者**：还不确定方向，希望看到几个可比较的职业路径。
-- **开发者/产品同学**：想参考一个不依赖数据库、可本地跑、可部署到 Serverless 的 LLM 应用样例。
+- **开发者/产品同学**：想参考一个不依赖数据库、可本地跑、可部署到 Cloudflare Workers 或 Serverless 的 LLM 应用样例。
 
 典型体验流程：
 
 1. 打开网页，上传 1-4 张简历截图。
 2. 填写目标城市/国家、想尝试或想避开的方向、学校专业、年级或工作年限等可选信息。
-3. 点击生成，等待约 1-3 分钟。
+3. 点击生成，快速版通常约 2 分钟，完整报告通常约 4-6 分钟。
 4. 页面直接返回报告：推荐路径、备选路径、不建议路径、证据解释、风险提醒和补强建议。
 
 这个项目不会创建账号，不依赖数据库，不保存简历文件。一次请求结束后，报告只存在于当前页面响应里；刷新页面后需要重新生成。
@@ -95,7 +95,7 @@ OPENAI_API_KEYS=key_1,key_2,key_3
 OPENAI_PER_KEY_CONCURRENCY=8
 ```
 
-`OPENAI_PER_KEY_CONCURRENCY=8` 表示单个 key 同时最多跑 8 个模型请求。多个 key 会在同一个 Node/Vercel 实例内自动选当前 in-flight 最少的 key。注意：这不是全局分布式限流；如果 Vercel 同时启动多个实例，每个实例都会各自做一份本地 key 池调度。
+`OPENAI_PER_KEY_CONCURRENCY=8` 表示单个 key 同时最多跑 8 个模型请求。多个 key 会在同一个运行实例内自动选当前 in-flight 最少的 key。注意：这不是全局分布式限流；如果平台同时启动多个实例，每个实例都会各自做一份本地 key 池调度。
 
 如果你使用的是 OpenAI 协议兼容服务，例如 newapi、oneapi 或公司内部代理，替换这两项即可：
 
@@ -149,13 +149,78 @@ DEFAULT_MODEL=claude-opus-4-8
 
 ## 部署方式
 
-这个项目不强制依赖 Vercel。它本质上是一个 Node.js + Express 应用，前端静态文件在 `public/`，生成接口在 `/api/report/generate`。
+这个项目不强制依赖 Vercel。它可以完整部署到 Cloudflare Workers，也可以作为普通 Node.js + Express 应用运行。前端静态文件在 `public/`，生成接口统一是 `/api/report/generate`。
 
 你可以选择：
 
 - 本地直接运行；
+- 完整部署到 Cloudflare Workers；
 - 部署到 Vercel；
 - 部署到任何能运行 Node.js 服务的机器或平台。
+
+### 部署到 Cloudflare Workers
+
+Cloudflare 部署由一个 Worker 同时承载：
+
+- `public/` 静态页面和收款码图片；
+- `/api/report/generate` 报告生成接口；
+- `QUOTA_DO` Durable Object 每日完整报告额度计数；
+- `/healthz` 与 `/cloudflare-healthz` 健康检查。
+
+准备工作：
+
+```bash
+npm install
+npm run typecheck
+npm run cf:build
+```
+
+首次部署前登录 Wrangler：
+
+```bash
+npx wrangler login
+```
+
+然后设置生产环境变量。真实 key 只写到 Cloudflare secret，不要写进 GitHub：
+
+```bash
+npx wrangler secret put OPENAI_API_KEYS
+npx wrangler secret put OPENAI_BASE_URL
+```
+
+普通配置可以放在 Cloudflare Dashboard 的 Worker Variables，或按需用 Wrangler 配置：
+
+```text
+LLM_PROVIDER=openai
+OPENAI_MODEL=gpt-5.4-mini
+OPENAI_PER_KEY_CONCURRENCY=8
+WORKER_MODEL_PARSE_RESUME=gpt-5.4
+WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
+WORKER_MODEL_SYNTHESIZE_ROLES_FAST=gpt-5.4-mini
+WORKER_MODEL_SYNTHESIZE_ROLES=gpt-5.5
+WORKER_MODEL_OPPORTUNITY_SCOUT=gpt-5.4
+WORKER_MODEL_STRATEGY_FAST=gpt-5.4-mini
+WORKER_MODEL_STRATEGY=gpt-5.5
+WORKER_MODEL_RED_TEAM=gpt-5.5
+ENABLE_WEB_SEARCH=false
+GEN_TIMEOUT_MS=760000
+QUOTA_FULL_DAILY_LIMIT=150
+QUOTA_TIME_ZONE=Asia/Shanghai
+```
+
+部署：
+
+```bash
+npm run cf:deploy
+```
+
+相关文件：
+
+- `cloudflare/worker.ts`：Cloudflare 原生 Worker 入口；
+- `wrangler.toml`：Worker、Static Assets、Durable Object 配置；
+- `dist/cloudflare-worker.js`：API 直传部署时使用的编译产物，可由 `npm run cf:build` 重新生成。
+
+Cloudflare 上的每日 150 次完整报告限制由 Durable Object 计数，比单机内存计数更适合线上使用。仍然建议根据真实访问量观察日志和模型账单。
 
 ### 部署到 Vercel
 
@@ -219,7 +284,7 @@ Vercel 相关文件已经准备好：
 - `vercel.json`：把请求改写到 API，并设置较长函数运行时间；
 - `public/`：静态页面和收款码图片。
 
-生成一次报告会串联多次 LLM 调用，可能需要 1-3 分钟。部署时建议选择支持较长函数运行时间的配置；如果经常超时，可以换更快的模型、减少图片数量，或把部分环节改成异步任务。
+生成一次报告会串联多次 LLM 调用，快速版通常约 2 分钟，完整报告通常约 4-6 分钟。部署时建议选择支持较长函数运行时间的配置；如果经常超时，可以换更快的模型、减少图片数量，或把部分环节改成异步任务。
 
 ### 部署到普通 Node 服务
 
@@ -239,7 +304,7 @@ npm start
 - 不依赖数据库。
 - 不保存上传的简历截图。
 - 不保存生成后的报告。
-- 上传图片使用内存处理，单文件大小限制为 3MB，最多 4 张。
+- 上传图片使用内存处理，单文件大小限制为 2MB，最多 4 张。
 - API key 只应放在 `.env` 或部署平台的环境变量里。
 - 如果你把项目公开到 GitHub，请不要提交 `.env`、`.vercel/` 或任何真实密钥。
 
@@ -252,6 +317,7 @@ npm start
 ```text
 public/                  # 前端页面和静态图片
 api/index.ts             # Vercel 入口
+cloudflare/worker.ts     # Cloudflare Worker 入口
 src/app.ts               # Express app、上传和生成接口
 src/core/pipeline.ts     # 报告生成主流程
 src/workers/             # 各个 LLM/规则 worker

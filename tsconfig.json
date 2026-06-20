@@ -13,5 +13,5 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "api/**/*.ts", "evals/**/*.ts"]
+  "include": ["src/**/*.ts", "api/**/*.ts", "evals/**/*.ts", "cloudflare/**/*.ts"]
 }

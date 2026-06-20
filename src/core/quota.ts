@@ -6,7 +6,7 @@ export interface QuotaDecision {
   used: number;
   limit: number;
   remaining: number;
-  mode: "off" | "redis" | "memory";
+  mode: "off" | "redis" | "memory" | "durable_object";
   key?: string;
   reason?: string;
 }
