@@ -77,8 +77,17 @@ app.post("/api/report/generate", upload.array("images", 4), async (req, res) => 
     }
 
     // 主动超时兜底：即使某个 worker 卡住，也在 Vercel 强杀前返回友好失败。
-    const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("生成超时（请稍后重试或减少图片）")), GEN_TIMEOUT_MS));
-    const result = await Promise.race([generateReport(images, inputs), timeout]);
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, rej) => {
+      timeoutId = setTimeout(() => rej(new Error("生成超时（请稍后重试或减少图片）")), GEN_TIMEOUT_MS);
+    });
+    const result = await (async () => {
+      try {
+        return await Promise.race([generateReport(images, inputs, { tier }), timeout]);
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
+    })();
     const meta: ReportMeta = { tier, createdAt: nowIso(), status: result.status, error: result.error };
     res.set("Content-Type", "text/html; charset=utf-8");
     if (result.status === "insufficient_input") return res.send(renderInsufficient(result.artifacts));

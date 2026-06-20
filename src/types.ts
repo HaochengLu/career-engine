@@ -267,6 +267,7 @@ export interface WorkerMeta {
   model: string;
   created_at: string;
   confidence?: number;
+  duration_ms?: number;
 }
 
 // 渲染所需的轻量元信息（同步流程，不依赖任何存储）

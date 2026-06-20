@@ -3,7 +3,7 @@
 import type { ImageInput } from "../providers/llm.js";
 import { nowIso } from "../util.js";
 import { WEIGHTS, config } from "../config.js";
-import type { ReportStatus, ReportArtifacts, WorkerMeta, EvidenceItem, ParsedResume, UserInputs } from "../types.js";
+import type { ReportStatus, ReportArtifacts, WorkerMeta, EvidenceItem, ParsedResume, UserInputs, Tier, RoleArchetype } from "../types.js";
 
 import { parseResume } from "../workers/parseResume.js";
 import { extractEvidence } from "../workers/extractEvidence.js";
@@ -23,8 +23,69 @@ export interface GenerateResult {
   error?: string;
 }
 
-function meta(name: string, model: string, confidence?: number): WorkerMeta {
-  return { worker_name: name, worker_version: "0.1.0", model, created_at: nowIso(), confidence };
+export interface GenerateOptions {
+  tier?: Tier;
+}
+
+function meta(name: string, model: string, confidence?: number, durationMs?: number): WorkerMeta {
+  return { worker_name: name, worker_version: "0.1.0", model, created_at: nowIso(), confidence, duration_ms: durationMs };
+}
+
+async function timed<T>(name: string, run: () => Promise<T>): Promise<{ value: T; durationMs: number }> {
+  const started = Date.now();
+  console.info(`[worker:start] ${name}`);
+  try {
+    const value = await run();
+    const durationMs = Date.now() - started;
+    console.info(`[worker:done] ${name} duration_ms=${durationMs}`);
+    return { value, durationMs };
+  } catch (err) {
+    const durationMs = Date.now() - started;
+    console.error(`[worker:fail] ${name} duration_ms=${durationMs}`, err);
+    throw err;
+  }
+}
+
+async function optionalTimed<T>(
+  name: string,
+  run: () => Promise<T>,
+): Promise<{ ok: true; value: T; durationMs: number } | { ok: false; error: unknown; durationMs: number }> {
+  const started = Date.now();
+  console.info(`[worker:start] ${name}`);
+  try {
+    const value = await run();
+    const durationMs = Date.now() - started;
+    console.info(`[worker:done] ${name} duration_ms=${durationMs}`);
+    return { ok: true, value, durationMs };
+  } catch (error) {
+    const durationMs = Date.now() - started;
+    console.error(`[worker:fail] ${name} duration_ms=${durationMs}`, error);
+    return { ok: false, error, durationMs };
+  }
+}
+
+function timedSync<T>(name: string, run: () => T): { value: T; durationMs: number } {
+  const started = Date.now();
+  const value = run();
+  const durationMs = Date.now() - started;
+  console.info(`[worker:done] ${name} duration_ms=${durationMs}`);
+  return { value, durationMs };
+}
+
+function mergeRoles(base: RoleArchetype[], scout: RoleArchetype[]): RoleArchetype[] {
+  // 合并而非静默去重：同 role_id 命中时，保留【更高价值的召回通道】分类。
+  const rank: Record<string, number> = { emerging: 4, transferable_adjacent: 3, market_pull: 2, user_thesis: 1, evidence_near: 0 };
+  const byId = new Map(base.map((r) => [r.role_id, r]));
+  const extra: RoleArchetype[] = [];
+  for (const sr of scout) {
+    const ex = byId.get(sr.role_id);
+    if (ex) {
+      if ((rank[sr.recall_source ?? ""] ?? -1) > (rank[ex.recall_source ?? ""] ?? -1)) ex.recall_source = sr.recall_source;
+    } else {
+      extra.push(sr);
+    }
+  }
+  return [...base, ...extra];
 }
 
 // 客观的“输入不足”判定：用证据信号量化（阈值来自 scoring_weights.json，可校准），不让模型随口说不足。
@@ -42,22 +103,30 @@ function insufficiency(parsed: ParsedResume, evidence: EvidenceItem[]): string |
 export async function generateReport(
   images: ImageInput[],
   inputs: UserInputs,
+  options: GenerateOptions = {},
 ): Promise<GenerateResult> {
   const artifacts: ReportArtifacts = { user_inputs: inputs, worker_log: [] };
+  const tier = options.tier ?? "full";
+  const totalStarted = Date.now();
+  console.info(`[generate:start] tier=${tier} images=${images.length}`);
 
   try {
     // 1) 解析简历（视觉）
-    const parsed = await parseResume(images, inputs);
+    const parsedTimed = await timed("parseResume", () => parseResume(images, inputs));
+    const parsed = parsedTimed.value;
     artifacts.parsed = parsed.value;
-    artifacts.worker_log.push(meta("parseResume", parsed.model, parsed.value.ocr_confidence));
+    artifacts.worker_log.push(meta("parseResume", parsed.model, parsed.value.ocr_confidence, parsedTimed.durationMs));
 
     // 2) 抽取 + 评级证据
-    const ev = await extractEvidence(parsed.value, inputs);
+    const evTimed = await timed("extractEvidence", () => extractEvidence(parsed.value, inputs));
+    const ev = evTimed.value;
     artifacts.evidence = ev.value;
-    artifacts.worker_log.push(meta("extractEvidence", ev.model));
+    artifacts.worker_log.push(meta("extractEvidence", ev.model, undefined, evTimed.durationMs));
 
     // 3) 能力向量（确定性）
-    artifacts.capability_vector = buildCapabilityVector(ev.value);
+    const capabilityTimed = timedSync("capabilityVector", () => buildCapabilityVector(ev.value));
+    artifacts.capability_vector = capabilityTimed.value;
+    artifacts.worker_log.push(meta("capabilityVector", "code", undefined, capabilityTimed.durationMs));
     artifacts.overall_confidence = ev.value.length
       ? ev.value.reduce((s, e) => s + e.confidence, 0) / ev.value.length
       : 0;
@@ -66,79 +135,78 @@ export async function generateReport(
     const reason = insufficiency(parsed.value, ev.value);
     if (reason) {
       artifacts.insufficient_reason = reason;
+      console.info(`[generate:done] status=insufficient_input duration_ms=${Date.now() - totalStarted}`);
       return { status: "insufficient_input", artifacts };
     }
 
     // 3.5) 市场信号（可选联网；关闭时返回空串，不影响流程）
-    const market = await marketSignal(artifacts.capability_vector, ev.value, inputs);
-    if (market) artifacts.worker_log.push(meta("marketSignal", "web_search"));
-    else if (config.enableWebSearch) artifacts.worker_log.push(meta("marketSignal(failed)", "web_search"));
+    const marketTimed = await timed("marketSignal", () => marketSignal(artifacts.capability_vector!, ev.value, inputs));
+    const market = marketTimed.value;
+    if (market) artifacts.worker_log.push(meta("marketSignal", "web_search", undefined, marketTimed.durationMs));
+    else if (config.enableWebSearch) artifacts.worker_log.push(meta("marketSignal(failed)", "web_search", undefined, marketTimed.durationMs));
+    else artifacts.worker_log.push(meta("marketSignal(skipped)", "code", undefined, marketTimed.durationMs));
 
     // 4) 多通道召回候选职业本体（证据近 + 相邻迁移 + 市场拉动 + 用户意愿 + 新兴前沿）
-    const roles = await synthesizeRoles(artifacts.capability_vector, ev.value, inputs, market);
-    artifacts.worker_log.push(meta("synthesizeRoles", roles.model));
+    const rolesPromise = timed("synthesizeRoles", () => synthesizeRoles(artifacts.capability_vector!, ev.value, inputs, market));
+    const scoutPromise =
+      tier === "full"
+        ? optionalTimed("opportunityScout(parallel)", () => opportunityScout([], ev.value, inputs, market))
+        : Promise.resolve({ ok: false as const, error: new Error("skipped for trial"), durationMs: 0 });
 
-    // 4.5) 漏检审查（条件触发，省一次调用/降低 Vercel 时延）：
-    //   只有当“可能漏了高上限相邻/新兴方向”时才跑——存在前沿信号，或主召回里相邻/市场拉动/新兴候选不足。
-    const adjacentSources = new Set(["emerging", "transferable_adjacent", "market_pull"]);
-    const hasFrontier = ev.value.some((e) => e.frontier_signals.length > 0);
-    const adjacentCount = roles.value.filter((r) => r.recall_source && adjacentSources.has(r.recall_source)).length;
-    // 召回通道多样性 + 名单规模 + 单通道缺失：任一相邻/市场/新兴通道为 0，或通道太少、名单偏小 → 触发漏检审查。
-    const distinctSources = new Set(roles.value.map((r) => r.recall_source).filter(Boolean)).size;
-    const bySource = (src: string) => roles.value.filter((r) => r.recall_source === src).length;
-    const missingChannel = bySource("emerging") < 1 || bySource("transferable_adjacent") < 1 || bySource("market_pull") < 1;
-    const shouldScout = hasFrontier || adjacentCount < 2 || distinctSources < 3 || roles.value.length < 10 || missingChannel;
+    const [rolesTimed, scoutTimed] = await Promise.all([rolesPromise, scoutPromise]);
+    const roles = rolesTimed.value;
+    artifacts.worker_log.push(meta("synthesizeRoles", roles.model, undefined, rolesTimed.durationMs));
     artifacts.roles = roles.value;
-    if (shouldScout) {
-      const scout = await opportunityScout(roles.value, ev.value, inputs, market);
-      artifacts.worker_log.push(meta("opportunityScout", scout.model, scout.value.length));
-      // 合并而非静默去重：同 role_id 命中时，保留【更高价值的召回通道】分类（避免 scout 标出的 emerging 被原 evidence_near 覆盖丢弃）。
-      const rank: Record<string, number> = { emerging: 4, transferable_adjacent: 3, market_pull: 2, user_thesis: 1, evidence_near: 0 };
-      const byId = new Map(roles.value.map((r) => [r.role_id, r]));
-      const extra: typeof scout.value = [];
-      for (const sr of scout.value) {
-        const ex = byId.get(sr.role_id);
-        if (ex) {
-          if ((rank[sr.recall_source ?? ""] ?? -1) > (rank[ex.recall_source ?? ""] ?? -1)) ex.recall_source = sr.recall_source;
-        } else {
-          extra.push(sr);
-        }
-      }
-      artifacts.roles = [...roles.value, ...extra];
+
+    if (scoutTimed.ok) {
+      const scout = scoutTimed.value;
+      artifacts.worker_log.push(meta("opportunityScout(parallel)", scout.model, scout.value.length, scoutTimed.durationMs));
+      artifacts.roles = mergeRoles(roles.value, scout.value);
+    } else if (tier === "full") {
+      artifacts.worker_log.push(meta("opportunityScout(failed)", "code", undefined, scoutTimed.durationMs));
     } else {
-      artifacts.worker_log.push(meta("opportunityScout(skipped)", "code"));
+      artifacts.worker_log.push(meta("opportunityScout(skipped:trial)", "code", undefined, scoutTimed.durationMs));
     }
 
     // 5) 打分（确定性：覆盖度计分 + 硬门槛 + 决策分，权重按用户目标 profile）
-    artifacts.scores = scoreRoles(artifacts.roles, ev.value, inputs);
+    const scoresTimed = timedSync("scoreRoles", () => scoreRoles(artifacts.roles!, ev.value, inputs));
+    artifacts.scores = scoresTimed.value;
+    artifacts.worker_log.push(meta("scoreRoles", "code", undefined, scoresTimed.durationMs));
 
     // 6) 战略
-    const strat = await runStrategy(artifacts.scores, ev.value, inputs);
+    const stratTimed = await timed("strategy", () => runStrategy(artifacts.scores!, ev.value, inputs));
+    const strat = stratTimed.value;
     artifacts.strategy = strat.value;
-    artifacts.worker_log.push(meta("strategy", strat.model));
+    artifacts.worker_log.push(meta("strategy", strat.model, undefined, stratTimed.durationMs));
 
     // 7) 对抗 review
-    const rt = await redTeam(strat.value, artifacts.scores, ev.value);
-    artifacts.findings = rt.value;
-    artifacts.worker_log.push(meta("redTeam", rt.model));
+    const rt =
+      tier === "full"
+        ? await timed("redTeam", () => redTeam(strat.value, artifacts.scores!, ev.value))
+        : { value: { value: [], entailment: [], model: "code" }, durationMs: 0 };
+    artifacts.findings = rt.value.value;
+    artifacts.worker_log.push(meta(tier === "full" ? "redTeam" : "redTeam(skipped:trial)", rt.value.model, undefined, rt.durationMs));
 
     // 8) 仲裁（确定性硬规则：清幻觉 id、未达硬门槛主路径降级、置信传播）
-    const arb = arbitrate(strat.value, rt.value, artifacts.scores, ev.value, rt.entailment);
+    const arbTimed = timedSync("arbitrate", () => arbitrate(strat.value, rt.value.value, artifacts.scores!, ev.value, rt.value.entailment));
+    const arb = arbTimed.value;
     artifacts.strategy = arb.strategy;
     artifacts.findings = arb.findings;
-    if (arb.actions.length) artifacts.worker_log.push(meta("arbitrate", "code"));
+    artifacts.worker_log.push(meta("arbitrate", "code", arb.actions.length ? 1 : 0, arbTimed.durationMs));
 
     // 9) QA
-    artifacts.qa = runQa(arb.strategy, artifacts.scores, ev.value);
-    artifacts.worker_log.push(meta("qa", "code", artifacts.qa.passed ? 1 : 0));
+    const qaTimed = timedSync("qa", () => runQa(arb.strategy, artifacts.scores!, ev.value));
+    artifacts.qa = qaTimed.value;
+    artifacts.worker_log.push(meta("qa", "code", artifacts.qa.passed ? 1 : 0, qaTimed.durationMs));
 
+    console.info(`[generate:done] status=rendered duration_ms=${Date.now() - totalStarted}`);
     return { status: "rendered", artifacts };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     let status: ReportStatus = "failed";
     if (!artifacts.parsed || !artifacts.evidence) status = "parse_failed";
     else if (!artifacts.roles || !artifacts.scores || !artifacts.strategy) status = "review_failed";
-    console.error(`[generate] ${status}: ${msg}`);
+    console.error(`[generate] ${status} duration_ms=${Date.now() - totalStarted}: ${msg}`);
     return { status, artifacts, error: msg };
   }
 }
