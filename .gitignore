@@ -1,0 +1,8 @@
+node_modules/
+.env
+.vercel/
+.DS_Store
+data/storage/
+data/career.db
+data/career.db-*
+*.log

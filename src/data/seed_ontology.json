@@ -1,0 +1,363 @@
+{
+  "_note": "种子职业本体。这【不是】岗位全集，而是‘证据契约’的少量高质量锚点，用于：(1)给 synthesizeRoles 做 few-shot，让它能为任何没见过的职业即时合成同样结构的契约；(2)高频职业直接命中、省一次生成、保证质量。覆盖所有职业靠的是‘按需合成 + 锚点护栏’，不是把这个列表堆到几千条。required_evidence 的 capability 必须取自 capability_dimensions.json 的 id，从而让打分可确定、可解释。",
+  "version": "2026-06-20",
+  "archetypes": [
+    {
+      "role_id": "product.ai_application_pm",
+      "role_family": "product",
+      "display_name": "AI 应用产品 / AI 产品运营",
+      "target_titles": ["AI Product Manager", "Product Analyst", "Growth Product Associate"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "problem_framing", "label_zh": "能拆问题与场景的产品判断", "capability": "business_judgment", "min_strength": 3 },
+          { "key": "product_artifact", "label_zh": "可展示的产品产物（PRD/原型/竞品分析/demo）", "capability": "communication_content", "min_strength": 3 },
+          { "key": "tech_literacy", "label_zh": "与技术/模型对话的技术素养", "capability": "technical_delivery", "min_strength": 2 }
+        ],
+        "should_have": [
+          { "key": "metric_thinking", "label_zh": "指标/结果意识", "capability": "data_quant", "min_strength": 2 },
+          { "key": "user_research", "label_zh": "用户调研或需求分析", "capability": "user_client", "min_strength": 2 }
+        ],
+        "nice_to_have": [
+          { "key": "launched", "label_zh": "上线过产品/有增长结果", "capability": "business_judgment", "min_strength": 4 }
+        ]
+      },
+      "hard_gates": [],
+      "transferable_sources": ["software_project", "data_project", "content_strategy", "consulting_case", "startup_project"],
+      "common_false_positives": ["只写了使用 AI 工具但没有产品判断", "只做课程项目没有真实用户场景", "只有兴趣表达没有可展示产物"],
+      "gap_projects": ["AI 工具竞品分析 + 用户场景拆解 + PRD", "某行业 AI agent 应用 demo + 产品说明书"],
+      "market_notes": { "time_horizon": "medium", "automation_exposure": "augmented", "entry_risk": "medium" },
+      "traits": { "credential_gate": false, "portfolio_requirement": true, "quant_requirement": "medium", "client_facing_level": "medium", "physical_requirement": false }
+    },
+    {
+      "role_id": "data.business_analyst",
+      "role_family": "data",
+      "display_name": "商业/数据分析",
+      "target_titles": ["Data Analyst", "Business Analyst", "Analytics Associate"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "sql_or_tooling", "label_zh": "SQL/分析工具的实际使用", "capability": "data_quant", "min_strength": 3 },
+          { "key": "business_question", "label_zh": "把数据连到业务问题", "capability": "business_judgment", "min_strength": 3 }
+        ],
+        "should_have": [
+          { "key": "dashboard_artifact", "label_zh": "可展示的分析产物（dashboard/case）", "capability": "communication_content", "min_strength": 3 },
+          { "key": "stats", "label_zh": "统计/实验基础", "capability": "data_quant", "min_strength": 2 }
+        ],
+        "nice_to_have": [
+          { "key": "impact_result", "label_zh": "可量化的业务结果", "capability": "business_judgment", "min_strength": 4 }
+        ]
+      },
+      "hard_gates": [],
+      "transferable_sources": ["finance_project", "research_project", "ops_project", "marketing_project"],
+      "common_false_positives": ["只学过 SQL 课程没有真实分析", "有图表但没有业务结论"],
+      "gap_projects": ["含业务问题+数据口径+SQL+指标拆解+决策建议的 dashboard case study"],
+      "market_notes": { "time_horizon": "medium", "automation_exposure": "augmented", "entry_risk": "medium" },
+      "traits": { "credential_gate": false, "portfolio_requirement": true, "quant_requirement": "high", "client_facing_level": "low", "physical_requirement": false }
+    },
+    {
+      "role_id": "swe.backend",
+      "role_family": "software",
+      "display_name": "软件工程（后端/全栈）",
+      "target_titles": ["Software Engineer", "Backend Engineer", "Full-Stack Developer"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "shipped_code", "label_zh": "可展示的代码/系统交付", "capability": "technical_delivery", "min_strength": 4 },
+          { "key": "cs_fundamentals", "label_zh": "工程/算法基础", "capability": "technical_delivery", "min_strength": 3 }
+        ],
+        "should_have": [
+          { "key": "collaboration", "label_zh": "协作/代码评审/版本管理", "capability": "execution_pm", "min_strength": 2 }
+        ],
+        "nice_to_have": [
+          { "key": "production_system", "label_zh": "生产环境/真实用户系统", "capability": "technical_delivery", "min_strength": 5 }
+        ]
+      },
+      "hard_gates": [],
+      "transferable_sources": ["data_project", "research_project", "startup_project"],
+      "common_false_positives": ["只有课程作业没有可读代码", "罗列技术栈但无项目佐证"],
+      "gap_projects": ["一个开源/可部署的小项目 + README + 架构说明"],
+      "market_notes": { "time_horizon": "long", "automation_exposure": "augmented", "entry_risk": "medium" },
+      "traits": { "credential_gate": false, "portfolio_requirement": true, "quant_requirement": "medium", "client_facing_level": "low", "physical_requirement": false }
+    },
+    {
+      "role_id": "growth.marketing",
+      "role_family": "growth",
+      "display_name": "增长 / 市场营销",
+      "target_titles": ["Growth Associate", "Marketing Specialist", "Performance Marketing"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "channel_execution", "label_zh": "渠道/投放/内容的真实执行", "capability": "business_judgment", "min_strength": 3 },
+          { "key": "metric_thinking", "label_zh": "以指标驱动的结果意识", "capability": "data_quant", "min_strength": 2 }
+        ],
+        "should_have": [
+          { "key": "content_artifact", "label_zh": "可展示的内容/活动产物", "capability": "communication_content", "min_strength": 3 },
+          { "key": "audience_understanding", "label_zh": "用户/受众理解", "capability": "user_client", "min_strength": 2 }
+        ],
+        "nice_to_have": [
+          { "key": "growth_result", "label_zh": "可量化增长结果", "capability": "business_judgment", "min_strength": 4 }
+        ]
+      },
+      "hard_gates": [],
+      "transferable_sources": ["content_strategy", "data_project", "sales_experience", "community_project"],
+      "common_false_positives": ["只发过帖子没有数据复盘", "把课程营销项目当真实投放"],
+      "gap_projects": ["一个真实小预算投放/内容增长实验 + 数据复盘报告"],
+      "market_notes": { "time_horizon": "medium", "automation_exposure": "augmented", "entry_risk": "low" },
+      "traits": { "credential_gate": false, "portfolio_requirement": true, "quant_requirement": "medium", "client_facing_level": "medium", "physical_requirement": false }
+    },
+    {
+      "role_id": "consulting.strategy",
+      "role_family": "consulting",
+      "display_name": "咨询 / 战略与商业分析",
+      "target_titles": ["Strategy Analyst", "Management Consultant", "Business Analyst (Consulting)"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "structured_problem", "label_zh": "结构化拆解复杂问题", "capability": "business_judgment", "min_strength": 3 },
+          { "key": "communication", "label_zh": "清晰的书面/口头表达", "capability": "communication_content", "min_strength": 3 }
+        ],
+        "should_have": [
+          { "key": "quant_analysis", "label_zh": "量化分析能力", "capability": "data_quant", "min_strength": 2 },
+          { "key": "case_artifact", "label_zh": "可展示的案例/竞赛/项目", "capability": "execution_pm", "min_strength": 3 }
+        ],
+        "nice_to_have": [
+          { "key": "brand_endorsement", "label_zh": "强学校/公司背书", "capability": "credible_endorsement", "min_strength": 4 }
+        ]
+      },
+      "hard_gates": [],
+      "transferable_sources": ["research_project", "finance_project", "data_project", "startup_project"],
+      "common_false_positives": ["只有理论没有结构化产出", "把社团活动夸大为咨询项目"],
+      "gap_projects": ["一个真实/模拟商业案例：问题树 + 数据 + 建议 + 一页纸汇报"],
+      "market_notes": { "time_horizon": "medium", "automation_exposure": "augmented", "entry_risk": "high" },
+      "traits": { "credential_gate": false, "portfolio_requirement": false, "quant_requirement": "high", "client_facing_level": "high", "physical_requirement": false }
+    },
+    {
+      "role_id": "finance.fp_a",
+      "role_family": "finance",
+      "display_name": "财务 / 投融资分析",
+      "target_titles": ["Financial Analyst", "FP&A Analyst", "Investment Analyst"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "financial_modeling", "label_zh": "财务建模/估值/报表分析", "capability": "data_quant", "min_strength": 3 },
+          { "key": "domain_finance", "label_zh": "金融/会计领域知识", "capability": "domain_knowledge", "min_strength": 3 }
+        ],
+        "should_have": [
+          { "key": "business_sense", "label_zh": "商业理解", "capability": "business_judgment", "min_strength": 2 }
+        ],
+        "nice_to_have": [
+          { "key": "cert", "label_zh": "CFA/CPA 等证书进度", "capability": "credible_endorsement", "min_strength": 3 }
+        ]
+      },
+      "hard_gates": [
+        { "key": "audit_license", "label_zh": "审计/部分监管岗需要执照", "type": "license", "blocking": false, "can_be_acquired": "long" }
+      ],
+      "transferable_sources": ["data_project", "consulting_case", "accounting_experience"],
+      "common_false_positives": ["只上过金融课没有建模产物", "把 Excel 罗列当建模"],
+      "gap_projects": ["一份完整的公司估值/三表建模 case + 投资结论"],
+      "market_notes": { "time_horizon": "medium", "automation_exposure": "augmented", "entry_risk": "medium" },
+      "traits": { "credential_gate": false, "portfolio_requirement": true, "quant_requirement": "high", "client_facing_level": "medium", "physical_requirement": false }
+    },
+    {
+      "role_id": "design.ux",
+      "role_family": "design",
+      "display_name": "设计（UX / 产品设计）",
+      "target_titles": ["UX Designer", "Product Designer", "UI Designer"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "portfolio", "label_zh": "可展示的作品集", "capability": "communication_content", "min_strength": 4 },
+          { "key": "design_process", "label_zh": "从问题到方案的设计过程", "capability": "user_client", "min_strength": 3 }
+        ],
+        "should_have": [
+          { "key": "tooling", "label_zh": "设计工具/原型能力", "capability": "craft_physical", "min_strength": 3 }
+        ],
+        "nice_to_have": [
+          { "key": "shipped_design", "label_zh": "上线产品的设计", "capability": "technical_delivery", "min_strength": 4 }
+        ]
+      },
+      "hard_gates": [
+        { "key": "portfolio_required", "label_zh": "无作品集几乎无法入门", "type": "portfolio", "blocking": true, "can_be_acquired": "short" }
+      ],
+      "transferable_sources": ["content_strategy", "art_project", "frontend_project", "research_project"],
+      "common_false_positives": ["只有视觉作品没有设计思考", "套模板没有真实问题"],
+      "gap_projects": ["一个完整 case study：用户问题→调研→方案→可交互原型"],
+      "market_notes": { "time_horizon": "medium", "automation_exposure": "augmented", "entry_risk": "medium" },
+      "traits": { "credential_gate": false, "portfolio_requirement": true, "quant_requirement": "low", "client_facing_level": "medium", "physical_requirement": false }
+    },
+    {
+      "role_id": "education.teacher_k12",
+      "role_family": "education",
+      "display_name": "教师（基础教育）",
+      "target_titles": ["K12 Teacher", "学科教师", "学科教研"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "subject_knowledge", "label_zh": "扎实的学科知识", "capability": "domain_knowledge", "min_strength": 3 },
+          { "key": "teaching_practice", "label_zh": "真实授课/实习经历", "capability": "communication_content", "min_strength": 3 }
+        ],
+        "should_have": [
+          { "key": "classroom_mgmt", "label_zh": "课堂组织与学生互动", "capability": "interpersonal_influence", "min_strength": 2 }
+        ],
+        "nice_to_have": [
+          { "key": "results", "label_zh": "教学成果/学生反馈", "capability": "credible_endorsement", "min_strength": 3 }
+        ]
+      },
+      "hard_gates": [
+        { "key": "teaching_cert", "label_zh": "教师资格证/当地教育系统要求", "type": "credential", "blocking": true, "can_be_acquired": "medium" }
+      ],
+      "transferable_sources": ["tutoring_experience", "content_strategy", "research_project"],
+      "common_false_positives": ["只有学科背景没有授课经历", "把家教等同系统化教学"],
+      "gap_projects": ["完整一节课的教学设计 + 试讲录像 + 反思"],
+      "market_notes": { "time_horizon": "long", "automation_exposure": "resilient", "entry_risk": "medium" },
+      "traits": { "credential_gate": true, "portfolio_requirement": false, "quant_requirement": "low", "client_facing_level": "high", "physical_requirement": false }
+    },
+    {
+      "role_id": "healthcare.clinical_research_coordinator",
+      "role_family": "healthcare",
+      "display_name": "临床研究协调 / 医药支持",
+      "target_titles": ["Clinical Research Coordinator", "CRA", "Medical Affairs Associate"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "life_science", "label_zh": "生命科学/医学背景", "capability": "domain_knowledge", "min_strength": 3 },
+          { "key": "protocol_rigor", "label_zh": "流程/合规/数据严谨性", "capability": "compliance_risk", "min_strength": 2 }
+        ],
+        "should_have": [
+          { "key": "coordination", "label_zh": "多方协调与执行", "capability": "execution_pm", "min_strength": 2 },
+          { "key": "research_method", "label_zh": "研究方法/数据处理", "capability": "research", "min_strength": 2 }
+        ],
+        "nice_to_have": [
+          { "key": "gcp_cert", "label_zh": "GCP 等培训证书", "capability": "credible_endorsement", "min_strength": 3 }
+        ]
+      },
+      "hard_gates": [
+        { "key": "domain_required", "label_zh": "必须相关医学/生科背景", "type": "degree", "blocking": true, "can_be_acquired": "long" }
+      ],
+      "transferable_sources": ["research_project", "lab_experience", "data_project"],
+      "common_false_positives": ["无医学背景仅凭兴趣", "把普通行政当临床协调"],
+      "gap_projects": ["GCP 在线培训 + 一份临床研究流程梳理/文献综述"],
+      "market_notes": { "time_horizon": "long", "automation_exposure": "resilient", "entry_risk": "medium" },
+      "traits": { "credential_gate": true, "portfolio_requirement": false, "quant_requirement": "medium", "client_facing_level": "medium", "physical_requirement": true }
+    },
+    {
+      "role_id": "legal.compliance",
+      "role_family": "legal",
+      "display_name": "合规 / 法务与政策",
+      "target_titles": ["Compliance Analyst", "Legal Associate", "Policy Analyst"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "legal_knowledge", "label_zh": "法律/法规/政策知识", "capability": "domain_knowledge", "min_strength": 3 },
+          { "key": "rigorous_writing", "label_zh": "严谨的分析与写作", "capability": "communication_content", "min_strength": 3 }
+        ],
+        "should_have": [
+          { "key": "risk_sense", "label_zh": "风险与合规意识", "capability": "compliance_risk", "min_strength": 3 }
+        ],
+        "nice_to_have": [
+          { "key": "bar", "label_zh": "法考/律师资格", "capability": "credible_endorsement", "min_strength": 4 }
+        ]
+      },
+      "hard_gates": [
+        { "key": "bar_for_lawyer", "label_zh": "执业律师需通过法考/取得执照（合规岗通常不强制）", "type": "license", "blocking": false, "can_be_acquired": "long" }
+      ],
+      "transferable_sources": ["research_project", "audit_experience", "policy_project"],
+      "common_false_positives": ["把兴趣当专业能力", "无系统法律训练却投执业岗"],
+      "gap_projects": ["一份针对某行业的合规风险梳理/政策分析报告"],
+      "market_notes": { "time_horizon": "long", "automation_exposure": "resilient", "entry_risk": "high" },
+      "traits": { "credential_gate": true, "portfolio_requirement": false, "quant_requirement": "low", "client_facing_level": "medium", "physical_requirement": false }
+    },
+    {
+      "role_id": "ops.supply_chain",
+      "role_family": "operations",
+      "display_name": "运营 / 供应链与流程",
+      "target_titles": ["Operations Associate", "Supply Chain Analyst", "Process / BizOps"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "process_execution", "label_zh": "流程/运营的真实执行", "capability": "operations_process", "min_strength": 3 },
+          { "key": "coordination", "label_zh": "跨部门协调与推进", "capability": "execution_pm", "min_strength": 2 }
+        ],
+        "should_have": [
+          { "key": "data_ops", "label_zh": "用数据优化流程", "capability": "data_quant", "min_strength": 2 }
+        ],
+        "nice_to_have": [
+          { "key": "ops_result", "label_zh": "可量化的效率/成本结果", "capability": "business_judgment", "min_strength": 4 }
+        ]
+      },
+      "hard_gates": [],
+      "transferable_sources": ["project_experience", "data_project", "field_experience"],
+      "common_false_positives": ["把日常事务等同流程优化", "无量化无复盘"],
+      "gap_projects": ["一个流程瓶颈分析 + 改进方案 + 前后指标对比"],
+      "market_notes": { "time_horizon": "medium", "automation_exposure": "augmented", "entry_risk": "low" },
+      "traits": { "credential_gate": false, "portfolio_requirement": false, "quant_requirement": "medium", "client_facing_level": "medium", "physical_requirement": false }
+    },
+    {
+      "role_id": "sales.b2b_ae",
+      "role_family": "sales",
+      "display_name": "销售 / 客户成功（B2B）",
+      "target_titles": ["Account Executive", "Sales Development Rep", "Customer Success"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "client_facing", "label_zh": "真实客户沟通/成交经历", "capability": "interpersonal_influence", "min_strength": 3 },
+          { "key": "result_drive", "label_zh": "以结果为导向", "capability": "business_judgment", "min_strength": 2 }
+        ],
+        "should_have": [
+          { "key": "domain_understanding", "label_zh": "对所售产品/行业理解", "capability": "domain_knowledge", "min_strength": 2 }
+        ],
+        "nice_to_have": [
+          { "key": "quota_result", "label_zh": "可量化的业绩/转化", "capability": "business_judgment", "min_strength": 4 }
+        ]
+      },
+      "hard_gates": [],
+      "transferable_sources": ["service_experience", "community_project", "marketing_project"],
+      "common_false_positives": ["把客服等同销售", "无任何成交/转化佐证"],
+      "gap_projects": ["一段真实的小型销售/BD 实践 + 转化数据复盘"],
+      "market_notes": { "time_horizon": "medium", "automation_exposure": "resilient", "entry_risk": "low" },
+      "traits": { "credential_gate": false, "portfolio_requirement": false, "quant_requirement": "low", "client_facing_level": "high", "physical_requirement": false }
+    },
+    {
+      "role_id": "trade.electrician",
+      "role_family": "trade",
+      "display_name": "电工 / 电气安装维护",
+      "target_titles": ["电工", "Electrician", "电气维护技师"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "hands_on", "label_zh": "真实电气安装/维护动手经历", "capability": "craft_physical", "min_strength": 3 },
+          { "key": "safety_code", "label_zh": "电气规范与安全知识", "capability": "compliance_risk", "min_strength": 2 }
+        ],
+        "should_have": [
+          { "key": "troubleshooting", "label_zh": "现场排障与解决", "capability": "operations_process", "min_strength": 3 }
+        ],
+        "nice_to_have": [
+          { "key": "project_scale", "label_zh": "较大工程/带队经历", "capability": "execution_pm", "min_strength": 4 }
+        ]
+      },
+      "hard_gates": [
+        { "key": "electrician_license", "label_zh": "电工操作证/特种作业操作证", "type": "license", "blocking": true, "can_be_acquired": "medium" }
+      ],
+      "transferable_sources": ["maintenance_experience", "manufacturing_experience", "apprenticeship"],
+      "common_false_positives": ["只上过课没有实操", "无证上岗"],
+      "gap_projects": ["考取电工操作证 + 记录若干真实安装/排障案例（前后状态、安全要点）"],
+      "market_notes": { "time_horizon": "long", "automation_exposure": "resilient", "entry_risk": "low" },
+      "traits": { "credential_gate": true, "portfolio_requirement": false, "quant_requirement": "low", "client_facing_level": "medium", "physical_requirement": true }
+    },
+    {
+      "role_id": "healthcare.registered_nurse",
+      "role_family": "healthcare",
+      "display_name": "注册护士 / 临床护理",
+      "target_titles": ["注册护士", "Registered Nurse", "临床护理"],
+      "required_evidence": {
+        "must_have": [
+          { "key": "nursing_practice", "label_zh": "真实临床护理实践/实习", "capability": "craft_physical", "min_strength": 3 },
+          { "key": "clinical_knowledge", "label_zh": "护理/医学专业知识", "capability": "domain_knowledge", "min_strength": 3 }
+        ],
+        "should_have": [
+          { "key": "patient_care", "label_zh": "病患沟通与照护", "capability": "interpersonal_influence", "min_strength": 2 },
+          { "key": "protocol", "label_zh": "流程与规范执行", "capability": "compliance_risk", "min_strength": 2 }
+        ],
+        "nice_to_have": [
+          { "key": "specialty", "label_zh": "专科/急重症经验", "capability": "domain_knowledge", "min_strength": 4 }
+        ]
+      },
+      "hard_gates": [
+        { "key": "nurse_license", "label_zh": "护士执业资格证/注册护士执照", "type": "license", "blocking": true, "can_be_acquired": "long" }
+      ],
+      "transferable_sources": ["clinical_experience", "caregiving_experience", "biology_background"],
+      "common_false_positives": ["只有生物学历无临床实践", "把陪护等同专业护理"],
+      "gap_projects": ["通过护士执业资格考试 + 积累临床实习时数与带教评价"],
+      "market_notes": { "time_horizon": "long", "automation_exposure": "resilient", "entry_risk": "medium" },
+      "traits": { "credential_gate": true, "portfolio_requirement": false, "quant_requirement": "low", "client_facing_level": "high", "physical_requirement": true }
+    }
+  ]
+}

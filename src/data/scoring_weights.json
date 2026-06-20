@@ -1,0 +1,113 @@
+{
+  "_note": "评分权重与映射。第一性原理立场：这些不是真理，而是【显式、可审计、可校准的先验】。写在配置里而非埋进代码，因为(1)没有真实职业 outcome 之前无法统计学习权重；(2)摆到台面才可被反驳、被覆盖。score 来源是【证据覆盖度】而非关键词命中。",
+  "version": "2026-06-20",
+  "calibration_status": "heuristic_v0",
+  "calibrated_on_samples": 0,
+  "_provenance": "全部为冷启动启发式先验，未经任何数据标定。系统当前【不收集线上反馈、不自动学习】；如需校准，请人工复盘样本后手动更新本文件并把 calibrated_on_samples 改成真实样本量。对外只展示弱/中/强分档与置信，不展示两位数分值。",
+
+  "evidence_strength_value": {
+    "0": 0.0, "1": 0.1, "2": 0.3, "3": 0.55, "4": 0.8, "5": 1.0
+  },
+
+  "recency": { "half_life_months": 36, "floor": 0.4 },
+
+  "current_fit": {
+    "_note": "当前匹配度 = 各档证据契约覆盖度加权（权重和=1）。must 用几何平均做瓶颈；recency 已在 evidenceContribution 乘性生效，不再单列。",
+    "must_have": 0.6,
+    "should_have": 0.3,
+    "nice_to_have": 0.1
+  },
+
+  "order_profiles": {
+    "_note": "排序权重由用户目标决定。决策分只用 5 个【正交、各计一次】的因子，权重和=1，decision_score 天然落在 0-1。刻意不再把 market_potential / gap_cost / narrative_risk 计入决策分：市场无法可信预测(中性常量，进了也只是噪声)、缺口=current_fit 的补集(重复)、叙事风险与 current_fit 高度相关(二次惩罚)。这些维度仍会算出来供报告解释，但不参与排序。",
+    "balance": { "current_fit": 0.4, "evidence_trust": 0.25, "entry_feasibility": 0.2, "differentiation": 0.1, "constraint_fit": 0.05 },
+    "stable": { "current_fit": 0.38, "evidence_trust": 0.25, "entry_feasibility": 0.27, "differentiation": 0.05, "constraint_fit": 0.05 },
+    "upside": { "current_fit": 0.3, "evidence_trust": 0.2, "entry_feasibility": 0.12, "differentiation": 0.33, "constraint_fit": 0.05 }
+  },
+
+  "evidence_trust": {
+    "_note": "证据可信度 = 以最强证据为主 + 少量印证。max 体现质量上限(与覆盖度质量门一致：有强证据才高)，mean 给印证一点加权；与 current_fit 的覆盖度正交。无支撑证据则取 no_evidence。",
+    "max_weight": 0.7,
+    "mean_weight": 0.3,
+    "no_evidence": 0.05
+  },
+
+  "entry_feasibility": {
+    "_note": "入门可行性=能否进入，由【硬门槛】驱动(与 current_fit 的覆盖度正交，避免和 gap_cost 双重计算 must)。无未满足阻塞门槛≈0.95；门槛越难取得越低；短期无法补齐再乘 hard_block_penalty。",
+    "gate_penalty_floor": 0.05,
+    "hard_block_penalty": 0.5
+  },
+
+  "differentiation": {
+    "_note": "差异化=稀缺性，只由【该职业方向本身的前沿性】与【召回通道】驱动；不再混入 should 覆盖度(那属于 current_fit)。前沿加成是 role-specific：只有该角色的必需能力与用户前沿信号相交时才给。",
+    "base": 0.3,
+    "frontier_boost": 0.25,
+    "recall_source_boost": { "emerging": 0.22, "transferable_adjacent": 0.18, "market_pull": 0.12, "evidence_near": 0.0, "user_thesis": 0.0 }
+  },
+
+  "constraint_fit": {
+    "_note": "约束适配。命中 avoid → avoid；用户想要/标 user_desired → desired（desired 优先于 avoid）；其余中性。avoid 不仅是软扣分：命中 avoid 的方向 decision_score 还会被 veto 封顶到 avoid_veto_ceiling，可靠地从推荐里踢出——尊重‘我不想做某方向’（如不想做 AI）。",
+    "avoid": 0.2,
+    "neutral": 0.6,
+    "desired": 0.85,
+    "avoid_veto_ceiling": 0.3
+  },
+
+  "gap_cost": {
+    "_note": "缺口成本（仅供报告解释/缺口说明，不进决策分，避免与 current_fit 重复）。= must 未覆盖比例 × must_weight + 门槛惩罚 × gate_weight。",
+    "must_weight": 0.6,
+    "gate_weight": 0.4,
+    "uncovered_must_threshold": 0.5
+  },
+
+  "coverage_quality_gate": {
+    "_note": "覆盖度质量门：covered 不仅看数量(combine 在证据多时会饱和)，还要看最强证据质量。语义：项目级(≥3)证据才算‘可接受覆盖’(上限 mid_cap)，可展示产物/外部验证(≥4)才算‘充分覆盖’(不封顶)，仅自称(≤1)/学习级则覆盖封到 weak_cap。0.3/0.6 对应‘不足信任/可接受但未充分’。",
+    "strong_min_strength": 4,
+    "medium_min_strength": 3,
+    "mid_cap": 0.6,
+    "weak_cap": 0.3
+  },
+
+  "gate": {
+    "_note": "硬门槛判定：只有‘可展示/外部验证级(≥require_strength)且文本对得上’的证据，或事实性输入字段明确写明，才算已具备资质；仅提及/想做不算。绝不把名校/名企背书当作满足执照/学历门槛。veto_ceiling：存在短期无法取得(long/no)的阻塞门槛时，decision_score 封顶到此值，作为硬约束否决，防止‘不可达但证据匹配’的方向排到前列。",
+    "require_strength": 4,
+    "veto_ceiling": 0.45
+  },
+
+  "near_term_min_evidence_trust": 0.4,
+  "no_evidence_base_confidence": 0.1,
+
+  "sufficiency": {
+    "_note": "客观输入充分性闸门。证据总信号低于 signal_threshold、或条数不足、或全是弱证据，则返回 insufficient_input 而不硬生成。",
+    "signal_threshold": 0.6,
+    "min_evidence": 2,
+    "min_meaningful_strength": 2,
+    "low_ocr": 0.3
+  },
+
+  "confidence": {
+    "_note": "报告整体/路径置信度阈值。低于 min_publish 走 insufficient/低置信。",
+    "min_publish": 0.35,
+    "low_confidence_band": 0.55
+  },
+
+  "confidence_calculation": {
+    "_note": "角色置信度 = baseConf × (base_floor + must_bottleneck_weight × tierBottleneck(must))。证据数量/瓶颈越足，整体置信越高。系数显式可校准。",
+    "base_floor": 0.5,
+    "must_bottleneck_weight": 0.5
+  },
+
+  "bands": {
+    "_note": "把 0-1 分数映射成弱/中/强，避免伪精确。质量门防‘弱证据堆量’：强必须≥1条可展示产物/外部验证(≥4)，中必须≥1条项目级(≥3)，仅自称(≤1)一律弱。",
+    "strong": 0.66,
+    "medium": 0.4,
+    "strong_min_strength": 4,
+    "medium_min_strength": 3
+  },
+
+  "market_potential_default": {
+    "_note": "市场潜力系统无法可信预测：固定中性、不进决策分、不做偏移，仅作信息项展示。真正的市场拉动通过召回通道与 adjacent_upside 体现。",
+    "neutral": 0.5,
+    "confidence": 0.3
+  }
+}

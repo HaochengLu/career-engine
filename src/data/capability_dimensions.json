@@ -1,0 +1,20 @@
+{
+  "_note": "能力资产维度。这是一个可扩展的开放分类：覆盖白领/技术/商业/研究/合规/运营/人际/背书，并保留 other 兜底维度，避免卡死纯体力、手艺、艺术、临床操作等职业。新增维度只需在此追加，无需改代码。",
+  "version": "2026-06-20",
+  "dimensions": [
+    { "id": "technical_delivery", "name_zh": "技术实现", "desc": "代码、系统、工具、工程交付" },
+    { "id": "data_quant", "name_zh": "数据与量化", "desc": "指标、统计、实验、建模、分析" },
+    { "id": "business_judgment", "name_zh": "商业判断", "desc": "收入、成本、增长、市场、竞争" },
+    { "id": "user_client", "name_zh": "用户与客户理解", "desc": "调研、销售、服务、客户成功" },
+    { "id": "communication_content", "name_zh": "内容与表达", "desc": "写作、展示、教学、叙事、视觉呈现" },
+    { "id": "domain_knowledge", "name_zh": "领域知识", "desc": "行业、法规、医疗、教育、金融、制造等" },
+    { "id": "execution_pm", "name_zh": "执行与项目管理", "desc": "组织、协调、推进、交付" },
+    { "id": "research", "name_zh": "研究能力", "desc": "文献、实验、论文、方法论" },
+    { "id": "compliance_risk", "name_zh": "合规与风险", "desc": "法律、审计、隐私、安全、质量" },
+    { "id": "operations_process", "name_zh": "运营与流程", "desc": "供应链、流程优化、排班、现场管理" },
+    { "id": "interpersonal_influence", "name_zh": "人际影响", "desc": "销售、谈判、领导、辅导、跨部门合作" },
+    { "id": "craft_physical", "name_zh": "实操与手艺", "desc": "体力、现场操作、临床操作、工艺、设备、表演等可演示的动手能力" },
+    { "id": "credible_endorsement", "name_zh": "可信背书", "desc": "学校、公司、证书、奖项、作品、推荐" },
+    { "id": "other", "name_zh": "其他", "desc": "不属于上述任何维度、但对该职业关键的能力（兜底，保证泛化）" }
+  ]
+}

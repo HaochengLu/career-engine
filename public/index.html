@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
+<title>职业画像报告 · 上传简历</title>
+<style>
+:root{--bg:#faf8f3;--ink:#1f2328;--muted:#6b7280;--line:#e7e3da;--accent:#b4532a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:620px;margin:0 auto;padding:28px 18px 80px}
+h1{font-size:24px;margin:6px 0}
+.sub{color:var(--muted);font-size:14px;margin-bottom:18px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;margin:14px 0}
+label{display:block;font-size:13px;color:var(--muted);margin-top:12px}
+input,textarea,select{font:inherit;width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;margin-top:4px}
+.row{display:flex;gap:10px}.row>div{flex:1}
+.btn{display:inline-block;background:var(--accent);color:#fff;border:0;padding:12px 22px;border-radius:9px;font-weight:600;font-size:16px;cursor:pointer;margin-top:16px}
+.btn[disabled]{opacity:.5}
+.notice{background:#fff7ed;border:1px solid #f3d8b6;border-radius:10px;padding:12px 14px;font-size:13px;color:#7a4a1d;margin-top:10px}
+.hint{font-size:12px;color:var(--muted)}
+fieldset{border:1px solid var(--line);border-radius:10px;margin:14px 0;padding:8px 14px 14px}
+legend{font-size:13px;color:var(--muted);padding:0 6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>别再盲投</h1>
+  <p class="sub">上传简历截图，生成一份「你现在最像哪类候选人、最该冲哪条路径、缺什么证据、最短怎么补」的职业画像报告。</p>
+
+  <form id="f">
+    <div class="card">
+      <label>简历截图（可多张，支持手机截图）</label>
+      <input type="file" name="images" accept="image/*" multiple />
+      <p class="hint">建议把手机号、邮箱、身份证号等先打码再上传。本服务不存储你的简历与报告。</p>
+
+      <label>报告档位</label>
+      <select name="tier">
+        <option value="trial">初版（¥1 · 精简）</option>
+        <option value="full">完整报告（¥10 · 全套）</option>
+      </select>
+      <p class="hint">付款全凭自觉，报告底部有微信收款码；不付也能看。</p>
+    </div>
+
+    <fieldset>
+      <legend>补充信息（可选，填了更准）</legend>
+      <div class="row">
+        <div><label>学校</label><input name="school" /></div>
+        <div><label>专业</label><input name="major" /></div>
+      </div>
+      <div class="row">
+        <div><label>年级 / 工作年限</label><input name="grade_or_years" placeholder="如 大四 / 工作3年" /></div>
+        <div><label>目标城市</label><input name="target_locations" placeholder="逗号分隔" /></div>
+      </div>
+      <label>想冲的方向</label><input name="desired_roles" placeholder="如 AI产品, 数据分析（逗号分隔）" />
+      <label>明确不想做的方向</label><input name="avoid_roles" placeholder="如 纯销售（逗号分隔）" />
+      <label>你的取向（影响路径排序）</label>
+      <select name="declared_goal">
+        <option value="balance">均衡</option>
+        <option value="stable">求稳：先拿到现实 offer</option>
+        <option value="upside">求上限：更看重未来天花板</option>
+      </select>
+      <label>硬约束</label><input name="constraints" placeholder="如 需要签证, 愿意补作品集（逗号分隔）" />
+      <label>其它想让系统知道的</label><textarea name="notes" rows="2"></textarea>
+    </fieldset>
+
+    <button class="btn" id="btn" type="submit">生成我的职业画像</button>
+    <div id="msg" class="notice" style="display:none"></div>
+  </form>
+</div>
+
+<script>
+const f = document.getElementById('f');
+const btn = document.getElementById('btn');
+const msg = document.getElementById('msg');
+f.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  btn.disabled = true; btn.textContent = '生成中…';
+  msg.style.display = 'block';
+  msg.textContent = '正在解析简历、拆解证据、合成职业路径并做对抗审查…（约 1-3 分钟，请勿关闭页面）';
+  try {
+    const res = await fetch('/api/report/generate', { method: 'POST', body: new FormData(f) });
+    const html = await res.text();
+    if (!res.ok && !html) throw new Error('生成失败（' + res.status + '）');
+    // 直接把返回的报告 HTML 渲染到当前页（不存盘、不跳转）
+    document.open(); document.write(html); document.close();
+  } catch (err) {
+    msg.textContent = '出错了：' + (err && err.message ? err.message : err);
+    btn.disabled = false; btn.textContent = '重试';
+  }
+});
+</script>
+</body>
+</html>
