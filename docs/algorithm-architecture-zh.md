@@ -392,7 +392,7 @@ QA 检查：
 
 ```env
 LLM_PROVIDER=openai
-OPENAI_BASE_URL=https://your-openai-compatible-endpoint/v1
+OPENAI_BASE_URL=
 OPENAI_MODEL=gpt-5.4-mini
 WORKER_MODEL_PARSE_RESUME=gpt-5.4
 WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
@@ -402,7 +402,7 @@ WORKER_MODEL_STRATEGY=gpt-5.5
 WORKER_MODEL_RED_TEAM=gpt-5.5
 ```
 
-如果使用官方 OpenAI，可以把 `OPENAI_BASE_URL` 设为 `https://api.openai.com/v1`。如果使用第三方或自建兼容网关，只在 `.env`、Vercel Environment Variables、服务器 secret manager 里填写真实地址，不要把私有网关域名写进公开文档或提交到 GitHub。
+如果使用官方 OpenAI 或第三方/自建兼容网关，只在 `.env`、Vercel Environment Variables、服务器 secret manager 里填写真实 base URL；公开文档和 GitHub 提交里不要写私有网关域名。
 
 ### 6.2 低成本配置
 
