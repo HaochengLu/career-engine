@@ -20,6 +20,11 @@ input,textarea,select{font:inherit;width:100%;padding:9px;border:1px solid var(-
 .btn[disabled]{opacity:.5}
 .notice{background:#fff7ed;border:1px solid #f3d8b6;border-radius:10px;padding:12px 14px;font-size:13px;color:#7a4a1d;margin-top:10px}
 .hint{font-size:12px;color:var(--muted)}
+.progress{display:none;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:10px}
+.progress-head{display:flex;justify-content:space-between;gap:12px;font-size:13px;font-weight:600}
+.progress-track{height:8px;background:#f0ece4;border-radius:999px;overflow:hidden;margin:9px 0 6px}
+.progress-fill{height:100%;width:0;background:var(--accent);border-radius:999px;transition:width .35s ease}
+.progress-detail{margin:0}
 fieldset{border:1px solid var(--line);border-radius:10px;margin:14px 0;padding:8px 14px 14px}
 legend{font-size:13px;color:var(--muted);padding:0 6px}
 </style>
@@ -40,7 +45,7 @@ legend{font-size:13px;color:var(--muted);padding:0 6px}
         <option value="trial">快速版（¥1，先看大方向）</option>
         <option value="full">完整报告（¥10，包含路径、缺口和行动建议）</option>
       </select>
-      <p class="hint">付款全凭自觉，报告生成后会显示收款码；不付款也能查看结果。</p>
+      <p class="hint">目前是生成后自觉付款；快速版通常约 2 分钟，完整报告通常约 4-6 分钟，图片多或上游模型慢时会更久。</p>
     </div>
 
     <fieldset>
@@ -67,6 +72,11 @@ legend{font-size:13px;color:var(--muted);padding:0 6px}
 
     <button class="btn" id="btn" type="submit">生成我的职业方向报告</button>
     <div id="msg" class="notice" style="display:none"></div>
+    <div id="progress" class="progress">
+      <div class="progress-head"><span id="progressLabel">准备材料</span><span id="progressPct">0%</span></div>
+      <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+      <p id="progressDetail" class="hint progress-detail">这是估算进度；报告完成后会自动显示。</p>
+    </div>
   </form>
 </div>
 
@@ -74,6 +84,11 @@ legend{font-size:13px;color:var(--muted);padding:0 6px}
 const f = document.getElementById('f');
 const btn = document.getElementById('btn');
 const msg = document.getElementById('msg');
+const progress = document.getElementById('progress');
+const progressLabel = document.getElementById('progressLabel');
+const progressPct = document.getElementById('progressPct');
+const progressFill = document.getElementById('progressFill');
+const progressDetail = document.getElementById('progressDetail');
 const MAX_IMAGES = 4;
 const MAX_UPLOAD_BYTES = 3.8 * 1024 * 1024;
 const IMAGE_PROFILES = [
@@ -81,10 +96,84 @@ const IMAGE_PROFILES = [
   { maxSide: 1300, quality: 0.74 },
   { maxSide: 1050, quality: 0.68 },
 ];
+let progressTimer = null;
+const STAGE_PLANS = {
+  trial: {
+    total: 125,
+    detail: '快速版通常约 2 分钟；正在生成初版方向判断。',
+    stages: [
+      { at: 0, pct: 4, label: '准备材料' },
+      { at: 8, pct: 12, label: '阅读简历' },
+      { at: 45, pct: 42, label: '抽取职业证据' },
+      { at: 82, pct: 72, label: '生成候选方向' },
+      { at: 108, pct: 91, label: '整理初版报告' },
+    ],
+  },
+  full: {
+    total: 320,
+    detail: '完整报告通常约 4-6 分钟；会多做策略与风险审查。',
+    stages: [
+      { at: 0, pct: 3, label: '准备材料' },
+      { at: 10, pct: 8, label: '阅读简历' },
+      { at: 50, pct: 23, label: '抽取职业证据' },
+      { at: 90, pct: 40, label: '生成候选方向' },
+      { at: 135, pct: 55, label: '形成职业策略' },
+      { at: 245, pct: 84, label: '审查风险与证据' },
+      { at: 305, pct: 94, label: '整理完整报告' },
+    ],
+  },
+};
 
 function showStatus(text) {
   msg.style.display = 'block';
   msg.textContent = text;
+}
+
+function selectedTier() {
+  const data = new FormData(f);
+  return data.get('tier') === 'full' ? 'full' : 'trial';
+}
+
+function setProgress(pct, label, detail) {
+  progress.style.display = 'block';
+  const safePct = Math.max(0, Math.min(100, Math.round(pct)));
+  progressFill.style.width = safePct + '%';
+  progressPct.textContent = safePct + '%';
+  progressLabel.textContent = label;
+  progressDetail.textContent = detail;
+}
+
+function startProgress(tier) {
+  stopProgress(false);
+  const plan = STAGE_PLANS[tier] || STAGE_PLANS.trial;
+  const startedAt = Date.now();
+  const tick = () => {
+    const sec = (Date.now() - startedAt) / 1000;
+    let current = plan.stages[0];
+    let next = null;
+    for (let i = 0; i < plan.stages.length; i++) {
+      if (sec >= plan.stages[i].at) {
+        current = plan.stages[i];
+        next = plan.stages[i + 1] || null;
+      }
+    }
+    let pct = current.pct;
+    if (next) {
+      const span = Math.max(1, next.at - current.at);
+      pct = current.pct + (next.pct - current.pct) * Math.min(1, (sec - current.at) / span);
+    } else {
+      pct = Math.min(96, current.pct + (sec - current.at) * 0.05);
+    }
+    setProgress(pct, current.label, plan.detail);
+  };
+  tick();
+  progressTimer = setInterval(tick, 1000);
+}
+
+function stopProgress(hide) {
+  if (progressTimer) clearInterval(progressTimer);
+  progressTimer = null;
+  if (hide) progress.style.display = 'none';
 }
 
 function loadImage(file) {
@@ -173,17 +262,23 @@ function normalizeError(err) {
 
 f.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const tier = selectedTier();
   btn.disabled = true; btn.textContent = '生成中…';
+  startProgress(tier);
   showStatus('正在准备材料，图片会先自动压缩。请先不要关闭页面。');
   try {
     const body = await buildPayload(f);
-    showStatus('正在阅读简历并生成报告，通常需要 1-3 分钟。请先不要关闭页面。');
+    showStatus(tier === 'full'
+      ? '正在生成完整报告，通常需要 4-6 分钟。请先不要关闭页面。'
+      : '正在生成快速版报告，通常需要约 2 分钟。请先不要关闭页面。');
     const res = await fetch('/api/report/generate', { method: 'POST', body });
     const html = await res.text();
     if (!res.ok && !html) throw new Error('生成失败（' + res.status + '）');
     // 直接把返回的报告 HTML 渲染到当前页（不存盘、不跳转）
+    setProgress(100, '报告生成完成', '正在打开报告。');
     document.open(); document.write(html); document.close();
   } catch (err) {
+    stopProgress(false);
     msg.textContent = '出错了：' + normalizeError(err);
     btn.disabled = false; btn.textContent = '重试';
   }
