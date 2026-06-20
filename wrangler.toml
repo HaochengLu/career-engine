@@ -1,0 +1,6 @@
+name = "career-engine"
+main = "cloudflare/worker.js"
+compatibility_date = "2025-12-01"
+
+[observability]
+enabled = true
