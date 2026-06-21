@@ -80,6 +80,29 @@ function reserveWithMemory(key: string, limit: number): QuotaDecision {
   };
 }
 
+function usageFromCount(usedRaw: number, limit: number, mode: QuotaDecision["mode"], key: string): QuotaDecision {
+  const used = Math.max(0, Math.floor(usedRaw || 0));
+  const cappedUsed = Math.min(used, limit);
+  return {
+    allowed: used < limit,
+    used: cappedUsed,
+    limit,
+    remaining: Math.max(0, limit - cappedUsed),
+    mode,
+    key,
+    reason: used < limit ? undefined : "今日生成名额已用完。",
+  };
+}
+
+async function usageWithRedis(key: string, limit: number): Promise<QuotaDecision> {
+  const used = Number((await redisCommand<number | null>("get", key)) ?? 0);
+  return usageFromCount(used, limit, "redis", key);
+}
+
+function usageWithMemory(key: string, limit: number): QuotaDecision {
+  return usageFromCount(memoryCounters.get(key) ?? 0, limit, "memory", key);
+}
+
 export async function reserveReportQuota(tier: Tier): Promise<QuotaDecision> {
   void tier;
 
@@ -96,5 +119,22 @@ export async function reserveReportQuota(tier: Tier): Promise<QuotaDecision> {
   } catch (e) {
     console.error("[quota] Redis 计数失败，降级为内存计数：", e instanceof Error ? e.message : e);
     return reserveWithMemory(key, limit);
+  }
+}
+
+export async function getReportQuotaUsage(): Promise<QuotaDecision> {
+  const limit = Math.floor(config.quota.dailyLimit);
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return { allowed: true, used: 0, limit: 0, remaining: 0, mode: "off" };
+  }
+
+  const key = quotaKey();
+  if (!redisConfigured()) return usageWithMemory(key, limit);
+
+  try {
+    return await usageWithRedis(key, limit);
+  } catch (e) {
+    console.error("[quota] Redis 查询失败，降级为内存计数：", e instanceof Error ? e.message : e);
+    return usageWithMemory(key, limit);
   }
 }

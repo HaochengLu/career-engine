@@ -1,7 +1,7 @@
 import { setRuntimeEnv, config } from "../src/config.js";
 import { nowIso } from "../src/util.js";
 import { generateReport } from "../src/core/pipeline.js";
-import { reserveReportQuota, type QuotaDecision } from "../src/core/quota.js";
+import { getReportQuotaUsage, reserveReportQuota, type QuotaDecision } from "../src/core/quota.js";
 import { renderReport, renderInsufficient, renderFailed } from "../src/render/report.js";
 import type { ImageInput } from "../src/providers/llm.js";
 import type { Tier, UserInputs, ReportMeta } from "../src/types.js";
@@ -137,6 +137,35 @@ async function reserveWorkerQuota(tier: Tier, env: WorkerEnv): Promise<QuotaDeci
   return (await res.json()) as QuotaDecision;
 }
 
+function quotaDecisionFromCount(usedRaw: number, limit: number, key: string): QuotaDecision {
+  const used = Math.max(0, Math.floor(usedRaw || 0));
+  const cappedUsed = Math.min(used, limit);
+  return {
+    allowed: used < limit,
+    used: cappedUsed,
+    limit,
+    remaining: Math.max(0, limit - cappedUsed),
+    mode: "durable_object",
+    key,
+    reason: used < limit ? undefined : "今日生成名额已用完。",
+  };
+}
+
+async function readWorkerQuota(env: WorkerEnv): Promise<QuotaDecision> {
+  if (!env.QUOTA_DO) return getReportQuotaUsage();
+
+  const limit = Math.floor(config.quota.dailyLimit);
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return { allowed: true, used: 0, limit: 0, remaining: 0, mode: "off" };
+  }
+
+  const key = quotaKey();
+  const id = env.QUOTA_DO.idFromName(key);
+  const res = await env.QUOTA_DO.get(id).fetch(new Request(`https://quota.local/usage?key=${encodeURIComponent(key)}&limit=${limit}`));
+  if (!res.ok) throw new Error(`Cloudflare quota usage failed: ${res.status}`);
+  return (await res.json()) as QuotaDecision;
+}
+
 async function parseRequest(request: Request): Promise<{ tier: Tier; inputs: UserInputs; images: ImageInput[]; error?: Response }> {
   const form = await request.formData();
   const tier: Tier = form.get("tier") === "full" ? "full" : "trial";
@@ -231,6 +260,15 @@ export class QuotaCounter {
   constructor(private state: { storage: { get<T>(key: string): Promise<T | undefined>; put<T>(key: string, value: T): Promise<void> } }) {}
 
   async fetch(request: Request): Promise<Response> {
+    if (request.method === "GET") {
+      const url = new URL(request.url);
+      const key = url.searchParams.get("key") ?? quotaKey();
+      const limit = Number(url.searchParams.get("limit") ?? config.quota.dailyLimit);
+      if (!Number.isFinite(limit) || limit <= 0) return json({ allowed: true, used: 0, limit: 0, remaining: 0, mode: "off" } satisfies QuotaDecision);
+      const used = (await this.state.storage.get<number>(key)) ?? 0;
+      return json(quotaDecisionFromCount(used, Math.floor(limit), key));
+    }
+
     const { key, limit } = (await request.json()) as { key: string; limit: number };
     const used = ((await this.state.storage.get<number>(key)) ?? 0) + 1;
     await this.state.storage.put(key, used);
@@ -260,6 +298,10 @@ export default {
         assets: Boolean(env.ASSETS),
         quota: env.QUOTA_DO ? "durable_object" : "fallback",
       });
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/usage/today") {
+      return json({ ok: true, ...(await readWorkerQuota(env)) });
     }
 
     if (request.method === "POST" && url.pathname === "/api/report/generate") {

@@ -4,7 +4,7 @@ import path from "node:path";
 import { config } from "./config.js";
 import { nowIso } from "./util.js";
 import { generateReport } from "./core/pipeline.js";
-import { reserveReportQuota } from "./core/quota.js";
+import { getReportQuotaUsage, reserveReportQuota } from "./core/quota.js";
 import { renderReport, renderInsufficient, renderFailed } from "./render/report.js";
 import type { ImageInput } from "./providers/llm.js";
 import type { Tier, UserInputs, ReportMeta } from "./types.js";
@@ -33,6 +33,12 @@ function toImageInput(f: Express.Multer.File): ImageInput {
   ) as ImageInput["media_type"];
   return { media_type: mt, data: f.buffer.toString("base64") };
 }
+
+app.get("/api/usage/today", async (_req, res) => {
+  const usage = await getReportQuotaUsage();
+  res.set("Cache-Control", "no-store");
+  return res.json({ ok: true, ...usage });
+});
 
 // 同步生成：一个请求跑完整条流水线并直接返回报告 HTML。无存盘、无轮询，Vercel 友好。
 app.post("/api/report/generate", upload.array("images", 4), async (req, res) => {

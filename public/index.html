@@ -16,6 +16,8 @@ h1{font-size:24px;margin:6px 0}
 label{display:block;font-size:13px;color:var(--muted);margin-top:12px}
 input,textarea,select{font:inherit;width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;margin-top:4px}
 .row{display:flex;gap:10px}.row>div{flex:1}
+.usage{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 10px;margin-bottom:12px;font-size:12px;color:var(--muted)}
+.usage strong{color:var(--ink);font-weight:700}
 .btn{display:inline-block;background:var(--accent);color:#fff;border:0;padding:12px 22px;border-radius:9px;font-weight:600;font-size:16px;cursor:pointer;margin-top:16px}
 .btn.secondary{background:#fff;color:var(--accent);border:1px solid #d8b39e;margin-left:8px}
 .btn[disabled]{opacity:.5}
@@ -41,6 +43,7 @@ legend{font-size:13px;color:var(--muted);padding:0 6px}
 <div class="wrap">
   <h1>找到更适合你的职业方向</h1>
   <p class="sub">上传简历截图，生成一份中文报告：现在适合投什么、哪些方向暂时不建议、还缺什么证据、接下来 30 天怎么补。</p>
+  <div id="usage" class="usage" aria-live="polite">今日使用次数：加载中</div>
 
   <form id="f">
     <div class="card">
@@ -115,6 +118,7 @@ const payQr = document.getElementById('payQr');
 const paidBtn = document.getElementById('paidBtn');
 const editBtn = document.getElementById('editBtn');
 const msg = document.getElementById('msg');
+const usage = document.getElementById('usage');
 const progress = document.getElementById('progress');
 const progressLabel = document.getElementById('progressLabel');
 const progressPct = document.getElementById('progressPct');
@@ -165,6 +169,25 @@ const STAGE_PLANS = {
 function showStatus(text) {
   msg.style.display = 'block';
   msg.textContent = text;
+}
+
+async function loadUsage() {
+  if (!usage) return;
+  try {
+    const res = await fetch('/api/usage/today', { cache: 'no-store' });
+    if (!res.ok) throw new Error('usage failed');
+    const data = await res.json();
+    const limit = Number(data.limit || 0);
+    const used = Number(data.used || 0);
+    const remaining = Number(data.remaining || 0);
+    if (limit > 0) {
+      usage.innerHTML = `今日已使用 <strong>${used}</strong> / ${limit} 次，剩余 <strong>${remaining}</strong> 次`;
+    } else {
+      usage.textContent = '今日使用次数：不限';
+    }
+  } catch {
+    usage.textContent = '今日使用次数：暂时无法读取';
+  }
 }
 
 function selectedTier() {
@@ -353,6 +376,7 @@ paidBtn.addEventListener('click', async () => {
     btn.disabled = false; paidBtn.disabled = false; editBtn.disabled = false;
     btn.textContent = '重新查看支付码';
     paidBtn.textContent = '已完成付款，开始生成';
+    loadUsage();
   }
 });
 
@@ -361,6 +385,8 @@ feedbackMail.addEventListener('click', () => {
   const body = encodeURIComponent((feedbackText.value || '').trim() || '我想反馈：');
   window.location.href = `mailto:${FEEDBACK_EMAIL}?subject=${subject}&body=${body}`;
 });
+
+loadUsage();
 </script>
 </body>
 </html>
