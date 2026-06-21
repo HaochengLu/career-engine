@@ -19,7 +19,7 @@ Career Engine 是一个“基于职业证据”的职业画像报告引擎。
 
 - 不做账号系统。
 - 不存简历、不落数据库。
-- 提供微信支付二维码、报告 JSON 下载和邮件反馈入口。
+- 提供微信支付二维码、完整报告 Markdown 下载和邮件反馈入口。
 - 一个请求内同步跑完整条流水线，可部署到 Cloudflare Workers、Vercel Serverless Function，或普通 Node 服务。
 
 ## 2. 第一性原理

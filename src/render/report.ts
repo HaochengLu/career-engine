@@ -79,31 +79,225 @@ function safeJson(value: unknown): string {
     .replace(/\u2029/g, "\\u2029");
 }
 
+function mdText(value: unknown): string {
+  return maskPII(String(value ?? "").trim()).replace(/\r\n/g, "\n");
+}
+
+function mdCell(value: unknown): string {
+  return mdText(value).replace(/\|/g, "\\|").replace(/\n+/g, "<br>") || "—";
+}
+
+function mdList(items: unknown[]): string {
+  const lines = items.map((item) => mdText(item)).filter(Boolean);
+  return lines.length ? lines.map((item) => `- ${item}`).join("\n") : "- —";
+}
+
+function labelZh(label: string): string {
+  const labels: Record<string, string> = {
+    near_term: "近期最现实",
+    high_ceiling: "未来最有上限",
+    challenge: "挑战型",
+    transition: "过渡",
+    not_recommended: "暂不建议",
+  };
+  return labels[label] ?? label;
+}
+
+function capabilityMarkdown(vec: CapabilityScore[]): string {
+  const rows = vec
+    .filter((c) => c.capability !== "other" || c.score > 0.2)
+    .sort((a, b) => b.score - a.score)
+    .map((c) => `| ${mdCell(c.name_zh)} | ${mdCell(c.band)} | ${mdCell(c.top_evidence_ids.join(", "))} |`);
+  return ["| 能力资产 | 强度 | 来源证据 |", "| --- | --- | --- |", ...(rows.length ? rows : ["| — | — | — |"])].join("\n");
+}
+
+function pathsMarkdown(s: Strategy, paths = s.paths): string {
+  if (!paths.length) return "—";
+  return paths
+    .map(
+      (p, index) => `### ${index + 1}. ${mdText(p.display_name)}（${mdText(labelZh(p.label))}）
+
+- 建议：${mdText(p.recommendation)}
+- 当前匹配：${mdText(p.current_fit_band)}
+- 未来上限：${mdText(p.future_band)}
+- 入门难度：${mdText(p.entry_difficulty)}
+- 置信度：${mdText(p.confidence_band)}
+- 为什么适合：${mdText(p.why_fit)}
+- 已有证据：${mdText(p.have_evidence)}
+- 缺什么：${mdText(p.missing_evidence)}
+- 投递关键词：${mdText(p.target_titles.join("、")) || "—"}
+- 最该补：${mdText(p.top_project)}
+- 不推荐情况：${mdText(p.not_recommended_when)}
+- 支撑证据：${mdText(p.supporting_evidence_ids.join(", ")) || "—"}`,
+    )
+    .join("\n\n");
+}
+
+function upsideMarkdown(s: Strategy): string {
+  const u = s.adjacent_upside;
+  if (!u || !u.display_name) return "—";
+  return `### ${mdText(u.display_name)}（高上限相邻）
+
+- 为什么值得看：${mdText(u.why)}
+- 最该补：${mdText(u.what_to_build)}
+- 支撑证据：${mdText(u.supporting_evidence_ids.join(", ")) || "—"}`;
+}
+
+function strategyCardMarkdown(s: Strategy): string {
+  const c = s.strategy_card;
+  return [
+    "| 项目 | 内容 |",
+    "| --- | --- |",
+    `| 主路径 | ${mdCell(c.main_path)} |`,
+    `| 副路径 | ${mdCell(c.secondary_path)} |`,
+    `| 挑战路径 | ${mdCell(c.challenge_path)} |`,
+    `| 暂不主攻 | ${mdCell(c.not_recommended)} |`,
+    `| 核心卖点 | ${mdCell(c.core_selling_point)} |`,
+    `| 最大短板 | ${mdCell(c.biggest_gap)} |`,
+    `| 30 天最重要 | ${mdCell(c.most_important_30d)} |`,
+  ].join("\n");
+}
+
+function reportMarkdown(meta: ReportMeta, artifacts: ReportArtifacts): string {
+  const s = artifacts.strategy;
+  if (!s) return "# 职业画像报告\n\n报告生成失败，暂无可下载内容。";
+
+  const tierLabel = meta.tier === "trial" ? "初版" : "完整报告";
+  const date = new Date(meta.createdAt).toLocaleDateString("zh-CN");
+  const vec = artifacts.capability_vector ?? [];
+  const parts: string[] = [
+    "# 职业画像报告",
+    "",
+    `版本：${tierLabel}`,
+    `生成日期：${date}`,
+    "",
+    "## 一句话职业画像",
+    mdText(s.one_liner),
+    "",
+  ];
+
+  if (meta.tier === "trial") {
+    const topCaps = [...vec]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map((c) => `${c.name_zh}：${c.band}`);
+    const topGaps = s.gap_map.slice(0, 3).map((g) => `${g.gap} — ${g.shortest_fix}（${g.estimated_cost}）`);
+
+    parts.push(
+      "## Top 3 职业路径",
+      pathsMarkdown(s, s.paths.slice(0, 3)),
+      "",
+      "## 高上限相邻路径（你可能没想到，但天花板更高）",
+      upsideMarkdown(s),
+      "",
+      "## 你当前最强的能力证据",
+      mdList(topCaps),
+      "",
+      "## 你当前最该补的缺口",
+      mdList(topGaps),
+      "",
+      "## 职业战略卡",
+      strategyCardMarkdown(s),
+      "",
+      "## 初版说明",
+      "这是初版。完整报告还包含：能力资产全表、不建议方向、完整 Gap Map、作品集/项目模板、简历叙事重构、30 天行动计划。",
+    );
+  } else {
+    const notRec = s.not_recommended.length
+      ? s.not_recommended
+          .map((n) => `### 暂不建议优先冲：${mdText(n.direction)}\n\n${mdList(n.reasons)}\n\n更好的策略：${mdText(n.better_strategy)}`)
+          .join("\n\n")
+      : "—";
+    const gapRows = s.gap_map.map((g) => `| ${mdCell(g.gap)} | ${mdCell(g.why_it_matters)} | ${mdCell(g.shortest_fix)} | ${mdCell(g.estimated_cost)} |`);
+    const projectBlocks = s.projects.length
+      ? s.projects
+          .map(
+            (p) => `### ${mdText(p.name)}（${mdText(p.target_role)}）
+
+- 证明：${mdText(p.proves)}
+- 交付物：${mdText(p.deliverable)}
+- 最低标准：${mdText(p.min_bar)}
+- 加分：${mdText(p.bonus_bar)}
+- 简历 bullet：${mdText(p.resume_bullet)}
+- 面试讲法：${mdText(p.interview_pitch)}`,
+          )
+          .join("\n\n")
+      : "—";
+
+    parts.push(
+      "## 你手上有什么牌（能力资产表）",
+      capabilityMarkdown(vec),
+      "",
+      "## 最适合的方向（Top 3）",
+      pathsMarkdown(s),
+      "",
+      "## 高上限相邻路径（你可能没想到，但天花板更高）",
+      upsideMarkdown(s),
+      "",
+      "## 暂不建议优先走的方向",
+      notRec,
+      "",
+      "## Gap Map（证据缺口）",
+      ["| 缺口 | 为什么重要 | 最短补法 | 成本 |", "| --- | --- | --- | --- |", ...(gapRows.length ? gapRows : ["| — | — | — | — |"])].join("\n"),
+      "",
+      "## 作品集 / 项目建议",
+      projectBlocks,
+      "",
+      "## 简历叙事重构",
+      mdList(s.narrative_rewrite),
+      "",
+      "## 30 天行动计划",
+      mdList(s.thirty_day_plan),
+      "",
+      "## 职业战略卡",
+      strategyCardMarkdown(s),
+    );
+  }
+
+  parts.push(
+    "",
+    "## 怎么看这份报告",
+    "这是基于你当前提供的材料得出的职业路径建议，不是人生结论。所有判断都尽量回到你材料里的证据；不确定的地方用“弱/中/低置信”表达，不假装精确。",
+    "",
+    "系统能可信判断的是“你的证据现在最能说服哪类岗位、缺什么证据最值得补”；它不掌握实时岗位数据，对“市场前景/未来上限”的判断是带低置信的弱信号，请自行结合现实核对。",
+    "",
+    "评分采用证据覆盖度计分，权重为公开、可校准的启发式先验（未经真实反馈标定，calibrated_on_samples=0），仅以弱/中/强分档展示；路径排序仅供参考，请结合“当前匹配”与“证据质量”自行判断。",
+    "",
+    "隐私：本服务不存储你的简历与报告（生成完即丢，刷新就没了）；仍建议上传前对手机号/邮箱/证件号打码。",
+  );
+
+  return parts.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+}
+
 function reportToolbar(meta: ReportMeta, artifacts: ReportArtifacts): string {
-  const payload = safeJson({ meta, artifacts });
+  const markdown = safeJson(reportMarkdown(meta, artifacts));
+  const metadata = safeJson({ meta });
   return `<div class="toolbar">
-    <button class="btn" type="button" data-download-report>下载结构化报告 JSON</button>
+    <button class="btn" type="button" data-download-report>下载完整报告 MD</button>
     <a class="btn secondary" href="#feedback">Comment / Feedback</a>
   </div>
-  <script id="structured-report-data" type="application/json">${payload}</script>
+  <script id="report-markdown-data" type="application/json">${markdown}</script>
+  <script id="report-meta-data" type="application/json">${metadata}</script>
   <script>
   (() => {
-    const dataEl = document.getElementById('structured-report-data');
+    const markdownEl = document.getElementById('report-markdown-data');
+    const metaEl = document.getElementById('report-meta-data');
+    let markdown = '';
     let payload = {};
-    try { payload = JSON.parse(dataEl ? dataEl.textContent || '{}' : '{}'); } catch {}
+    try { markdown = JSON.parse(markdownEl ? markdownEl.textContent || '""' : '""'); } catch {}
+    try { payload = JSON.parse(metaEl ? metaEl.textContent || '{}' : '{}'); } catch {}
 
     function safeDate(value) {
       const d = value ? new Date(value) : new Date();
       return Number.isNaN(d.getTime()) ? new Date().toISOString().slice(0, 10) : d.toISOString().slice(0, 10);
     }
 
-    function downloadJson() {
-      const content = JSON.stringify(payload, null, 2);
-      const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+    function downloadMarkdown() {
+      const blob = new Blob([markdown || '# 职业画像报告\\n'], { type: 'text/markdown;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'career-report-' + safeDate(payload && payload.meta && payload.meta.createdAt) + '.json';
+      a.download = 'career-report-' + safeDate(payload && payload.meta && payload.meta.createdAt) + '.md';
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -113,7 +307,7 @@ function reportToolbar(meta: ReportMeta, artifacts: ReportArtifacts): string {
     document.addEventListener('click', (event) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
-      if (target.closest('[data-download-report]')) downloadJson();
+      if (target.closest('[data-download-report]')) downloadMarkdown();
     });
   })();
   </script>`;
@@ -136,7 +330,7 @@ function feedbackBlock(): string {
     btn.dataset.bound = '1';
     btn.addEventListener('click', () => {
       const text = document.getElementById('feedbackText');
-      const dataEl = document.getElementById('structured-report-data');
+      const dataEl = document.getElementById('report-meta-data');
       let meta = {};
       try {
         const payload = JSON.parse(dataEl ? dataEl.textContent || '{}' : '{}');
