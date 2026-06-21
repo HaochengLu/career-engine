@@ -103,7 +103,7 @@ export const config = {
   get generationTimeoutMs() {
     return Number(env("GEN_TIMEOUT_MS") ?? 280_000);
   },
-  // 全凭自觉付费：微信收款码图片（放在 public/，Vercel 会按根路径静态托管）
+  // 微信支付二维码图片（放在 public/，平台会按根路径静态托管）
   payment: {
     get qrTrial() {
       return env("PAY_QR_TRIAL") ?? "/pay-1.png";

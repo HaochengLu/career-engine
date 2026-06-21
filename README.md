@@ -12,9 +12,9 @@ Career Engine 是一个轻量的职业规划小工具：用户上传简历截图
 
 1. 打开网页，上传 1-4 张简历截图。
 2. 填写目标城市/国家、想尝试或想避开的方向、学校专业、年级或工作年限等可选信息。
-3. 选择版本，微信扫码自觉付款后，点击“我已支付，开始生成”。
+3. 选择版本，微信扫码后，点击“已完成付款，开始生成”。
 4. 快速版通常约 2 分钟，完整报告通常约 4-6 分钟。
-4. 页面直接返回报告：推荐路径、备选路径、不建议路径、证据解释、风险提醒和补强建议。
+5. 页面直接返回报告：推荐路径、备选路径、不建议路径、证据解释、风险提醒和补强建议。
 
 这个项目不会创建账号，不依赖数据库，不保存简历文件。一次请求结束后，报告只存在于当前页面响应里；刷新页面后需要重新生成。
 
@@ -28,7 +28,7 @@ Career Engine 是一个轻量的职业规划小工具：用户上传简历截图
 - **路径排序与解释**：给出主路径、备选路径、暂不建议路径，并说明为什么。
 - **对抗审查**：检查报告中是否有证据不足、过度推断或不适合直接展示的结论。
 - **输入不足保护**：如果截图太少、太糊或证据信号太弱，会提示信息不足，而不是硬编一份报告。
-- **自愿付费展示**：报告底部可展示收款码；没有支付校验，也不影响查看。
+- **支付入口与反馈入口**：页面提供微信支付二维码、报告 JSON 下载，以及邮件反馈入口。
 
 更完整的算法路线可以看 [docs/algorithm-architecture-zh.md](docs/algorithm-architecture-zh.md)。
 
@@ -163,7 +163,7 @@ DEFAULT_MODEL=claude-opus-4-8
 
 Cloudflare 部署由一个 Worker 同时承载：
 
-- `public/` 静态页面和收款码图片；
+- `public/` 静态页面和支付二维码图片；
 - `/api/report/generate` 报告生成接口；
 - `QUOTA_DO` Durable Object 每日完整报告额度计数；
 - `/healthz` 与 `/cloudflare-healthz` 健康检查。
@@ -283,7 +283,7 @@ Vercel 相关文件已经准备好：
 
 - `api/index.ts`：Vercel Serverless Function 入口；
 - `vercel.json`：把请求改写到 API，并设置较长函数运行时间；
-- `public/`：静态页面和收款码图片。
+- `public/`：静态页面和支付二维码图片。
 
 生成一次报告会串联多次 LLM 调用，快速版通常约 2 分钟，完整报告通常约 4-6 分钟。部署时建议选择支持较长函数运行时间的配置；如果经常超时，可以换更快的模型、减少图片数量，或把部分环节改成异步任务。
 
@@ -309,7 +309,7 @@ npm start
 - API key 只应放在 `.env` 或部署平台的环境变量里。
 - 如果你把项目公开到 GitHub，请不要提交 `.env`、`.vercel/` 或任何真实密钥。
 
-如果你替换了 `public/pay-1.png`、`public/pay-10.png`、`public/pay-custom.png`，这些图片会随静态资源公开访问。
+如果你替换了 `public/pay-1.png`、`public/pay-10.png`、`public/pay-custom.png`，这些支付二维码图片会随静态资源公开访问。
 
 ---
 
@@ -322,7 +322,7 @@ cloudflare/worker.ts     # Cloudflare Worker 入口
 src/app.ts               # Express app、上传和生成接口
 src/core/pipeline.ts     # 报告生成主流程
 src/workers/             # 各个 LLM/规则 worker
-src/providers/           # LLM、搜索、支付展示等 provider
+src/providers/           # LLM、搜索、支付二维码等 provider
 src/data/                # 权重、能力维度、种子职业本体
 evals/run.ts             # mock 模式评估入口
 docs/                    # 算法架构说明
@@ -345,7 +345,7 @@ docs/                    # 算法架构说明
 - 没有账号系统；
 - 没有数据库；
 - 没有后台任务队列；
-- 没有支付回调；
+- 正式支付闭环需要自行接入支付回调；
 - 没有长期保存用户数据；
 - 没有把职业建议包装成确定结论。
 

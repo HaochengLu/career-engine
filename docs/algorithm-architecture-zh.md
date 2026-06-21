@@ -19,7 +19,7 @@ Career Engine 是一个“基于职业证据”的职业画像报告引擎。
 
 - 不做账号系统。
 - 不存简历、不落数据库。
-- 不做支付校验，只在报告底部展示收款码。
+- 提供微信支付二维码、报告 JSON 下载和邮件反馈入口。
 - 一个请求内同步跑完整条流水线，可部署到 Cloudflare Workers、Vercel Serverless Function，或普通 Node 服务。
 
 ## 2. 第一性原理
@@ -484,7 +484,7 @@ ENABLE_WEB_SEARCH=false
 | 文件 | 作用 |
 | --- | --- |
 | `public/index.html` | 上传页 |
-| `public/pay-*.png` | 收款码图片 |
+| `public/pay-*.png` | 支付二维码图片 |
 | `src/app.ts` | Express app 和 API route |
 | `cloudflare/worker.ts` | Cloudflare Worker 原生入口 |
 | `wrangler.toml` | Cloudflare Static Assets、Durable Object、Worker 配置 |
@@ -531,7 +531,7 @@ vercel.json      -> /(.*) rewrite 到 /api
 - 不提交 `.env`。
 - 不提交真实 API key。
 - Cloudflare/Vercel/服务器环境变量只放在部署平台的 secret 或环境变量管理里。
-- 如果仓库公开，`public/pay-*.png` 收款码会公开。
+- 如果仓库公开，`public/pay-*.png` 支付二维码图片会公开。
 - 不要把用户真实简历样本放进仓库。
 
 ## 10. 后续可增强

@@ -1,6 +1,6 @@
 import { config } from "../config.js";
 
-// 全凭自觉付费：只展示微信收款码，不做任何门槛/校验/回调。
+// 支付二维码配置：图片作为静态资源托管，真实生产可替换为正式支付系统。
 export interface PaymentInfo {
   qrTrial: string;
   qrFull: string;

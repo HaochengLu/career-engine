@@ -33,6 +33,11 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 .path h3{margin:0 0 6px;font-size:16px}
 .muted{color:var(--muted)}.small{font-size:13px}
 ul{margin:6px 0;padding-left:20px}li{margin:3px 0}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 18px}
+.btn{display:inline-block;background:var(--accent);color:#fff;border:0;padding:10px 16px;border-radius:9px;font:inherit;font-weight:600;font-size:14px;cursor:pointer;text-decoration:none}
+.btn.secondary{background:#fff;color:var(--accent);border:1px solid #d8b39e}
+.feedback textarea{font:inherit;width:100%;min-height:96px;border:1px solid var(--line);border-radius:10px;padding:10px;resize:vertical}
+.feedback-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
 .card-strategy{background:#1f2328;color:#fff;border-radius:14px;padding:20px}
 .card-strategy h2{color:#fff;border-color:#3a3f45}
 .card-strategy .row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #3a3f45;font-size:14px}
@@ -45,6 +50,8 @@ ul{margin:6px 0;padding-left:20px}li{margin:3px 0}
 .foot{color:var(--muted);font-size:12px;margin-top:28px;line-height:1.7}
 `;
 
+const FEEDBACK_EMAIL = "haocheng409@gmail.com";
+
 function shell(title: string, body: string): string {
   return `<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -52,19 +59,115 @@ function shell(title: string, body: string): string {
 <title>${esc(title)}</title><style>${PAGE_CSS}</style></head><body><div class="wrap">${body}</div></body></html>`;
 }
 
+function redactForExport(value: unknown): unknown {
+  if (typeof value === "string") return maskPII(value);
+  if (Array.isArray(value)) return value.map(redactForExport);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) out[key] = redactForExport(item);
+    return out;
+  }
+  return value;
+}
+
+function safeJson(value: unknown): string {
+  return JSON.stringify(redactForExport(value), null, 2)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+function reportToolbar(meta: ReportMeta, artifacts: ReportArtifacts): string {
+  const payload = safeJson({ meta, artifacts });
+  return `<div class="toolbar">
+    <button class="btn" type="button" data-download-report>下载结构化报告 JSON</button>
+    <a class="btn secondary" href="#feedback">Comment / Feedback</a>
+  </div>
+  <script id="structured-report-data" type="application/json">${payload}</script>
+  <script>
+  (() => {
+    const dataEl = document.getElementById('structured-report-data');
+    let payload = {};
+    try { payload = JSON.parse(dataEl ? dataEl.textContent || '{}' : '{}'); } catch {}
+
+    function safeDate(value) {
+      const d = value ? new Date(value) : new Date();
+      return Number.isNaN(d.getTime()) ? new Date().toISOString().slice(0, 10) : d.toISOString().slice(0, 10);
+    }
+
+    function downloadJson() {
+      const content = JSON.stringify(payload, null, 2);
+      const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'career-report-' + safeDate(payload && payload.meta && payload.meta.createdAt) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('[data-download-report]')) downloadJson();
+    });
+  })();
+  </script>`;
+}
+
+function feedbackBlock(): string {
+  return `<div id="feedback" class="card feedback">
+    <h2>Comment / Feedback</h2>
+    <p class="small muted">结果不准、页面卡住、想补充建议，都可以直接发邮件。</p>
+    <textarea id="feedbackText" placeholder="写下你想反馈的问题或建议。"></textarea>
+    <div class="feedback-actions">
+      <button id="feedbackSend" class="btn secondary" type="button">发送反馈邮件</button>
+      <span class="small muted">${esc(FEEDBACK_EMAIL)}</span>
+    </div>
+  </div>
+  <script>
+  (() => {
+    const btn = document.getElementById('feedbackSend');
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => {
+      const text = document.getElementById('feedbackText');
+      const dataEl = document.getElementById('structured-report-data');
+      let meta = {};
+      try {
+        const payload = JSON.parse(dataEl ? dataEl.textContent || '{}' : '{}');
+        meta = payload && payload.meta ? payload.meta : {};
+      } catch {}
+      const lines = [
+        '报告类型：' + (meta.tier || ''),
+        '生成时间：' + (meta.createdAt || ''),
+        '',
+        (text && text.value ? text.value.trim() : '') || '我想反馈：'
+      ];
+      const subject = encodeURIComponent('Career Engine Feedback');
+      const body = encodeURIComponent(lines.join('\\n'));
+      window.location.href = 'mailto:${FEEDBACK_EMAIL}?subject=' + subject + '&body=' + body;
+    });
+  })();
+  </script>`;
+}
+
 export function renderFailed(meta: ReportMeta): string {
+  const body = `<h1>这次没能生成</h1><p class="sub">状态：${esc(meta.status)}</p>
+     <div class="notice">${esc(meta.error ?? "出现了未知问题。")}</div>
+     <p class="small muted">可以用更清晰的截图、或补充目标方向后重试。</p>`;
   return shell(
     "生成失败",
-    `<h1>这次没能生成</h1><p class="sub">状态：${esc(meta.status)}</p>
-     <div class="notice">${esc(meta.error ?? "出现了未知问题。")}</div>
-     <p class="small muted">可以用更清晰的截图、或补充目标方向后重试。</p>`,
+    `${maskPII(body)}${feedbackBlock()}`,
   );
 }
 
 export function renderInsufficient(artifacts: ReportArtifacts): string {
-  return shell(
-    "信息不足",
-    `<h1>当前信息不足以给出高置信判断</h1>
+  const body = `<h1>当前信息不足以给出高置信判断</h1>
      <div class="notice">${esc(artifacts.insufficient_reason ?? "可识别的职业证据太少。")}</div>
      <p>建议补充后重新生成：</p>
      <ul>
@@ -72,7 +175,10 @@ export function renderInsufficient(artifacts: ReportArtifacts): string {
        <li>你做过的具体项目 / 实习 / 作品（哪怕一两段也好）。</li>
        <li>你想冲的方向、目标城市/国家、硬约束。</li>
      </ul>
-     <p class="small muted">这是刻意设计：宁可说“信息不足”，也不在没有证据时硬编一份看起来很确定的报告。</p>`,
+     <p class="small muted">这是刻意设计：宁可说“信息不足”，也不在没有证据时硬编一份看起来很确定的报告。</p>`;
+  return shell(
+    "信息不足",
+    `${maskPII(body)}${feedbackBlock()}`,
   );
 }
 
@@ -138,17 +244,15 @@ function strategyCard(s: Strategy): string {
   </div>`;
 }
 
-// 全凭自觉付费：生成前已展示收款码；报告里保留入口，方便用户补扫或追加支持。
 function paymentBlock(tier: Tier): string {
   const p = getPaymentInfo();
   const main = tier === "full" ? { src: p.qrFull, label: "完整报告 ¥10" } : { src: p.qrTrial, label: "初版 ¥1" };
   const box = (src: string, label: string) =>
     src ? `<div class="qrbox"><img class="qr" src="${esc(src)}" alt="${esc(label)}"><div>${esc(label)}</div></div>` : "";
   return `<div class="pay">
-    <div class="small muted">如果刚才还没来得及扫码，或想追加支持，可以在这里补扫。付款完全靠自觉，不做校验。</div>
+    <div class="small muted">如需再次扫码，可以在这里查看对应版本的二维码。</div>
     <div class="qrs">
       ${box(main.src, main.label)}
-      ${box(p.qrCustom, "其它金额 / 随意打赏")}
     </div>
   </div>`;
 }
@@ -175,7 +279,7 @@ export function renderReport(meta: ReportMeta, artifacts: ReportArtifacts): stri
   if (tier === "trial") {
     const topGaps = s.gap_map.slice(0, 3).map((g) => `<li><b>${esc(g.gap)}</b> — ${esc(g.shortest_fix)}（${esc(g.estimated_cost)}）</li>`).join("");
     const topCaps = [...vec].sort((a, b) => b.score - a.score).slice(0, 3).map((c) => `<li>${esc(c.name_zh)}：<span class="b-${c.band}">${c.band}</span></li>`).join("");
-    const body = `${head}
+    const content = `${head}
       <h2>Top 3 职业路径</h2>${pathBlock({ ...s, paths: s.paths.slice(0, 3) } as Strategy)}
       <h2>高上限相邻路径（你可能没想到，但天花板更高）</h2>${upsideBlock(s)}
       <h2>你当前最强的能力证据</h2><ul>${topCaps}</ul>
@@ -183,7 +287,7 @@ export function renderReport(meta: ReportMeta, artifacts: ReportArtifacts): stri
       ${strategyCard(s)}
       <div class="notice">这是 <b>初版</b>。完整报告（¥10）还包含：能力资产全表、不建议方向、完整 Gap Map、作品集/项目模板、简历叙事重构、30 天行动计划。重新选“完整报告”再生成即可。</div>
       ${DISCLAIMER}${pay}`;
-    return shell("职业画像报告（初版）", maskPII(body));
+    return shell("职业画像报告（初版）", `${reportToolbar(meta, artifacts)}${maskPII(content)}${feedbackBlock()}`);
   }
 
   // 完整报告（full）
@@ -208,7 +312,7 @@ export function renderReport(meta: ReportMeta, artifacts: ReportArtifacts): stri
     )
     .join("");
 
-  const body = `${head}
+  const content = `${head}
     <h2>你手上有什么牌（能力资产表）</h2>
     <table><thead><tr><th>能力资产</th><th>强度</th><th>来源证据</th></tr></thead><tbody>${capRows(vec)}</tbody></table>
     <h2>最适合的方向（Top 3）</h2>${pathBlock(s)}
@@ -221,5 +325,5 @@ export function renderReport(meta: ReportMeta, artifacts: ReportArtifacts): stri
     <h2>30 天行动计划</h2><ul>${s.thirty_day_plan.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
     ${strategyCard(s)}
     ${DISCLAIMER}${pay}`;
-  return shell("职业画像报告", maskPII(body));
+  return shell("职业画像报告", `${reportToolbar(meta, artifacts)}${maskPII(content)}${feedbackBlock()}`);
 }
