@@ -1,0 +1,27 @@
+# Career Engine
+
+Career Engine is an open-source AI career strategy report engine built by Haocheng Lu.
+
+It analyzes resume screenshots, extracts career evidence from education, projects, internships, skills, and achievements, runs a multi-agent review pipeline, and generates personalized career path recommendations.
+
+Unlike a simple resume optimizer, Career Engine evaluates the user's existing evidence, compares possible career directions, ranks recommended / alternative / not-recommended paths, and explains the reasoning behind each decision.
+
+## 中文摘要
+
+Career Engine 是一个开源 AI 职业策略报告引擎。它通过简历截图解析、职业证据抽取、多 agent 对抗审查和路径排序，为用户生成个性化职业路径推荐、风险提醒和行动计划。
+
+它不是单纯的简历润色工具，而是根据用户已有证据判断哪些方向值得优先尝试、哪些方向只能作为备选、哪些方向暂时不建议。
+
+## Main Links
+
+- GitHub Repository: https://github.com/HaochengLu/career-engine
+- Live Demo: https://career-engine.haocheng409-career.workers.dev/
+- Algorithm Architecture: https://github.com/HaochengLu/career-engine/blob/main/docs/algorithm-architecture-zh.md
+
+## Keywords
+
+AI career strategy, resume analysis, career recommendation system, multi-agent review, LLM application, evidence-based career planning, Cloudflare Workers, TypeScript, OpenAI, agentic AI, recommendation system.
+
+## 中文关键词
+
+AI 职业策略、简历分析、职业规划、职业路径推荐、多 agent 审查、LLM 应用、证据驱动职业规划、Cloudflare Workers、TypeScript、OpenAI、推荐系统。

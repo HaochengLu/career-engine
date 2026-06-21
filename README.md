@@ -1,12 +1,30 @@
-# Career Engine · 职业画像报告引擎
+# Career Engine · AI Career Strategy Report Engine
 
-Career Engine 是一个轻量的职业规划小工具：用户上传简历截图，补充一点求职偏好，系统会生成一份中文职业画像报告，帮助用户看清自己当前更像哪类候选人、可以优先冲哪些方向、简历里还缺哪些证据，以及下一步怎么补。
+Career Engine is an open-source AI career strategy engine. It analyzes resume screenshots, extracts evidence from education, projects, internships, skills, and achievements, then uses a multi-agent review pipeline to generate personalized career path recommendations.
+
+Unlike a simple resume optimizer, Career Engine does not just rewrite resumes. It evaluates the user's existing evidence, compares possible career directions, ranks recommended / alternative / not-recommended paths, and explains the reasoning behind each decision.
+
+## What It Does
+
+- Resume screenshot parsing
+- Evidence extraction and strength scoring
+- Career path synthesis
+- Multi-agent adversarial review
+- Risk detection for weak or insufficient evidence
+- Personalized action plan generation
+- Cloudflare Workers / Vercel / Node deployment
+
+## 中文概览
+
+Career Engine 是一个开源 AI 职业策略报告引擎。用户上传简历截图并补充少量求职偏好后，系统会从教育、项目、实习、技能、成果中抽取证据，生成一份中文职业画像报告，帮助用户看清自己当前更像哪类候选人、可以优先冲哪些方向、哪些方向暂时不建议，以及下一步应该补什么证据。
+
+它不是一个简单的简历优化器，也不是只按固定岗位名做关键词匹配。Career Engine 会根据用户已有证据临时合成候选职业画像，比较不同职业路径的可行性，排序推荐路径 / 备选路径 / 不建议路径，并用多 agent 对抗审查检查证据不足、过度推断和风险结论。
 
 它适合三类人：
 
 - **正在找工作的人**：想快速知道自己的简历更适合投哪些岗位。
 - **学生或转型者**：还不确定方向，希望看到几个可比较的职业路径。
-- **开发者/产品同学**：想参考一个不依赖数据库、可本地跑、可部署到 Cloudflare Workers 或 Serverless 的 LLM 应用样例。
+- **开发者/产品同学**：想参考一个不依赖数据库、可本地跑、可部署到 Cloudflare Workers、Vercel 或 Node 服务的 LLM application。
 
 典型体验流程：
 
@@ -20,18 +38,27 @@ Career Engine 是一个轻量的职业规划小工具：用户上传简历截图
 
 ---
 
-## 功能一览
+## 核心能力
 
-- **简历截图识别**：从截图里提取教育、项目、实习、技能、成果等职业信息。
-- **证据强度评估**：把“会 Python”“做过项目”“拿到结果”区分开，减少只按关键词判断的误差。
-- **职业方向生成**：不是只匹配固定岗位名，而是根据用户证据临时合成候选职业画像。
-- **路径排序与解释**：给出主路径、备选路径、暂不建议路径，并说明为什么。
-- **对抗审查**：检查报告中是否有证据不足、过度推断或不适合直接展示的结论。
-- **输入不足保护**：如果截图太少、太糊或证据信号太弱，会提示信息不足，而不是硬编一份报告。
+- **简历截图识别 / Resume analysis**：从截图里提取教育、项目、实习、技能、成果等职业信息。
+- **证据强度评估 / Evidence scoring**：把“会 Python”“做过项目”“拿到结果”区分开，减少只按关键词判断的误差。
+- **职业方向生成 / Career path synthesis**：不是只匹配固定岗位名，而是根据用户证据临时合成候选职业画像。
+- **路径排序与解释 / Career recommendation**：给出主路径、备选路径、暂不建议路径，并说明为什么。
+- **多 agent 对抗审查 / Multi-agent review**：检查报告中是否有证据不足、过度推断或不适合直接展示的结论。
+- **输入不足保护 / Weak evidence detection**：如果截图太少、太糊或证据信号太弱，会提示信息不足，而不是硬编一份报告。
 - **今日用量显示**：首页展示当天已生成次数、每日上限和剩余额度。
 - **支付入口与反馈入口**：页面提供微信支付二维码、完整报告 Markdown 下载，以及邮件反馈入口。
 
 更完整的算法路线可以看 [docs/algorithm-architecture-zh.md](docs/algorithm-architecture-zh.md)。
+
+## For AI Search / LLM Indexing
+
+Machine-readable project summary is available at:
+
+- `/llms.txt` on the deployed site, stored in this repo as [public/llms.txt](public/llms.txt)
+- [docs/algorithm-architecture-zh.md](docs/algorithm-architecture-zh.md)
+
+中文说明：为了让 AI 搜索、代码索引工具和开发者文档读取器更容易理解这个项目，仓库提供了机器可读摘要、核心链接和关键词，包括 AI career strategy、resume analysis、multi-agent review、career path recommendation、LLM application、Cloudflare Workers 和 TypeScript。
 
 ---
 
