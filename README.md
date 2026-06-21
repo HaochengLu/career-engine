@@ -131,19 +131,19 @@ DEFAULT_MODEL=claude-opus-4-8
 
 ## 推荐模型选择
 
-当前 OpenAI 兼容实现支持每个 worker 单独选择模型。默认配置偏质量优先：
+当前 OpenAI 兼容实现支持每个 worker 单独选择模型。默认配置偏稳定和速度优先，并在上游 524/504/408 超时时自动重试与降级到 mini 模型：
 
 | 环节 | 做什么 | 默认模型 |
 | --- | --- | --- |
 | `parseResume` | 读简历截图，提取结构化信息 | `gpt-5.4-mini` |
-| `extractEvidence` | 把经历拆成证据，并判断强度 | `gpt-5.5` |
+| `extractEvidence` | 把经历拆成证据，并判断强度 | `gpt-5.4-mini` |
 | `synthesizeRoles` | 根据证据合成候选职业画像 | `gpt-5.5` |
 | `opportunityScout` | 补充相邻/新兴/市场拉动方向 | `gpt-5.4` |
-| `strategy` | 生成主路径、备选路径和行动建议 | `gpt-5.5` |
-| `redTeam` | 检查幻觉、过度承诺和证据不足 | `gpt-5.5` |
+| `strategy` | 生成主路径、备选路径和行动建议 | `gpt-5.4-mini` |
+| `redTeam` | 检查幻觉、过度承诺和证据不足 | `gpt-5.4-mini` |
 | `marketSignal` | 可选联网检索市场信号 | `OPENAI_MODEL`，默认 `gpt-5.4-mini` |
 
-如果你更在意成本和速度，可以把 `gpt-5.5` 降到 `gpt-5.4`，或把非关键环节降到 `gpt-5.4-mini`。不建议把 `extractEvidence`、`strategy`、`redTeam` 降得太低，因为它们直接影响证据质量、报告表达和安全审查。
+如果你更在意报告质量，可以把 `extractEvidence`、`strategy`、`redTeam` 升到 `gpt-5.4` 或 `gpt-5.5`。如果你使用的第三方代理容易 524，建议保持默认 mini 配置。
 
 模型选择没有固定答案，最好用你自己的样例简历做小规模评估：看报告是否引用了真实证据、是否过度推断、是否能给出具体可执行建议，再决定是否降级到更便宜的模型。
 
@@ -197,13 +197,13 @@ LLM_PROVIDER=openai
 OPENAI_MODEL=gpt-5.4-mini
 OPENAI_PER_KEY_CONCURRENCY=8
 WORKER_MODEL_PARSE_RESUME=gpt-5.4-mini
-WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
+WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.4-mini
 WORKER_MODEL_SYNTHESIZE_ROLES_FAST=gpt-5.4-mini
 WORKER_MODEL_SYNTHESIZE_ROLES=gpt-5.5
 WORKER_MODEL_OPPORTUNITY_SCOUT=gpt-5.4
 WORKER_MODEL_STRATEGY_FAST=gpt-5.4-mini
-WORKER_MODEL_STRATEGY=gpt-5.5
-WORKER_MODEL_RED_TEAM=gpt-5.5
+WORKER_MODEL_STRATEGY=gpt-5.4-mini
+WORKER_MODEL_RED_TEAM=gpt-5.4-mini
 ENABLE_WEB_SEARCH=false
 GEN_TIMEOUT_MS=760000
 QUOTA_DAILY_LIMIT=100
@@ -239,11 +239,11 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-5.4-mini
 OPENAI_PER_KEY_CONCURRENCY=8
 WORKER_MODEL_PARSE_RESUME=gpt-5.4-mini
-WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
+WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.4-mini
 WORKER_MODEL_SYNTHESIZE_ROLES=gpt-5.5
 WORKER_MODEL_OPPORTUNITY_SCOUT=gpt-5.4
-WORKER_MODEL_STRATEGY=gpt-5.5
-WORKER_MODEL_RED_TEAM=gpt-5.5
+WORKER_MODEL_STRATEGY=gpt-5.4-mini
+WORKER_MODEL_RED_TEAM=gpt-5.4-mini
 ENABLE_WEB_SEARCH=false
 ```
 

@@ -127,7 +127,7 @@ export const workerModels: Record<string, string> = {
     return modelFor("WORKER_MODEL_PARSE_RESUME", "gpt-5.4-mini");
   },
   get extractEvidence() {
-    return modelFor("WORKER_MODEL_EXTRACT_EVIDENCE", "gpt-5.5");
+    return modelFor("WORKER_MODEL_EXTRACT_EVIDENCE", "gpt-5.4-mini");
   },
   get synthesizeRolesFast() {
     return modelFor("WORKER_MODEL_SYNTHESIZE_ROLES_FAST", "gpt-5.4-mini");
@@ -142,10 +142,10 @@ export const workerModels: Record<string, string> = {
     return modelFor("WORKER_MODEL_STRATEGY_FAST", "gpt-5.4-mini");
   },
   get strategy() {
-    return modelFor("WORKER_MODEL_STRATEGY", "gpt-5.5");
+    return modelFor("WORKER_MODEL_STRATEGY", "gpt-5.4-mini");
   },
   get redTeam() {
-    return modelFor("WORKER_MODEL_RED_TEAM", "gpt-5.5");
+    return modelFor("WORKER_MODEL_RED_TEAM", "gpt-5.4-mini");
   },
 };
 

@@ -90,6 +90,25 @@ function extractJson(raw: string): unknown | undefined {
   return undefined;
 }
 
+class OpenAICompatError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: string,
+  ) {
+    super(message);
+    this.name = "OpenAICompatError";
+  }
+}
+
+function isUpstreamTimeout(error: unknown): boolean {
+  return error instanceof OpenAICompatError && (error.status === 524 || error.status === 408 || error.status === 504);
+}
+
+function uniqueModels(primary: string, fallback: string): string[] {
+  return [primary, fallback].map((m) => m.trim()).filter((m, i, arr) => Boolean(m) && arr.indexOf(m) === i);
+}
+
 // OpenAI 协议兼容 provider：可指向官方 OpenAI 或任意 OpenAI 协议代理（newapi/oneapi 等）。
 // 结构化输出走 json_object + schema 注入 + zod 校验 + 一次纠错重试，最大化跨代理/跨模型兼容性。
 class OpenAICompatProvider implements LlmProvider {
@@ -126,7 +145,7 @@ class OpenAICompatProvider implements LlmProvider {
 
     let lastErr = "";
     for (let attempt = 0; attempt < 2; attempt++) {
-      const resp = await this.create(messages, req.maxTokens ?? 16000, model);
+      const resp = await this.create(messages, req.maxTokens ?? 16000, model, req.schemaName);
       const raw = resp.choices?.[0]?.message?.content ?? "";
       const parsed = extractJson(raw);
       if (parsed !== undefined) {
@@ -145,7 +164,42 @@ class OpenAICompatProvider implements LlmProvider {
     throw new Error(`OpenAI 结构化输出失败（${req.schemaName}）：${lastErr}`);
   }
 
-  private async create(messages: Array<Record<string, unknown>>, maxTokens: number, model: string) {
+  private async create(messages: Array<Record<string, unknown>>, maxTokens: number, model: string, schemaName: string) {
+    const models = uniqueModels(model, this.model);
+    let lastTimeout: unknown;
+    for (const candidate of models) {
+      try {
+        return await this.createWithRetry(messages, maxTokens, candidate);
+      } catch (error) {
+        if (!isUpstreamTimeout(error)) throw error;
+        lastTimeout = error;
+        if (candidate !== this.model) {
+          console.warn(`[llm:timeout] ${schemaName} model=${candidate} fallback=${this.model}`);
+        }
+      }
+    }
+    const last = lastTimeout instanceof OpenAICompatError ? `HTTP ${lastTimeout.status}` : "timeout";
+    throw new Error(`上游模型服务超时（${last}）。系统已自动重试并切换到更快模型，但仍未成功，请稍后重试或减少图片。`);
+  }
+
+  private async createWithRetry(messages: Array<Record<string, unknown>>, maxTokens: number, model: string) {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await this.createOnce(messages, maxTokens, model);
+      } catch (error) {
+        if (!isUpstreamTimeout(error)) throw error;
+        lastError = error;
+        if (attempt === 0) {
+          console.warn(`[llm:retry] upstream timeout model=${model}`);
+          await new Promise((resolve) => setTimeout(resolve, 600));
+        }
+      }
+    }
+    throw lastError;
+  }
+
+  private async createOnce(messages: Array<Record<string, unknown>>, maxTokens: number, model: string) {
     const base: Record<string, unknown> = {
       model,
       messages,
@@ -154,23 +208,30 @@ class OpenAICompatProvider implements LlmProvider {
     };
     const slot = await this.acquireClient();
     try {
-      return await this.postChatCompletion(slot.apiKey, base);
+      return await this.postWithParameterFallback(slot.apiKey, base, maxTokens);
+    } finally {
+      slot.inFlight = Math.max(0, slot.inFlight - 1);
+    }
+  }
+
+  private async postWithParameterFallback(apiKey: string, base: Record<string, unknown>, maxTokens: number) {
+    try {
+      return await this.postChatCompletion(apiKey, base);
     } catch (e) {
+      if (isUpstreamTimeout(e)) throw e;
       const msg = e instanceof Error ? e.message : String(e);
       // 代理/模型不认某些参数时逐项降级
       if (/response_format|json_object/i.test(msg)) {
         const { response_format, ...rest } = base;
         void response_format;
-        return await this.postChatCompletion(slot.apiKey, rest);
+        return await this.postChatCompletion(apiKey, rest);
       }
       if (/max_completion_tokens/i.test(msg)) {
         const { max_completion_tokens, ...rest } = base;
         void max_completion_tokens;
-        return await this.postChatCompletion(slot.apiKey, { ...rest, max_tokens: maxTokens });
+        return await this.postChatCompletion(apiKey, { ...rest, max_tokens: maxTokens });
       }
       throw e;
-    } finally {
-      slot.inFlight = Math.max(0, slot.inFlight - 1);
     }
   }
 
@@ -185,7 +246,7 @@ class OpenAICompatProvider implements LlmProvider {
     });
     const text = await res.text();
     if (!res.ok) {
-      throw new Error(`OpenAI compatible API failed: ${res.status} ${text.slice(0, 800)}`);
+      throw new OpenAICompatError(`OpenAI compatible API failed: ${res.status} ${text.slice(0, 800)}`, res.status, text);
     }
     try {
       return JSON.parse(text) as { choices?: Array<{ message?: { content?: string } }>; model?: string };

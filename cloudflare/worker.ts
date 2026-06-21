@@ -1,7 +1,7 @@
 import { setRuntimeEnv, config } from "../src/config.js";
 import { nowIso } from "../src/util.js";
 import { generateReport } from "../src/core/pipeline.js";
-import { getReportQuotaUsage, reserveReportQuota, type QuotaDecision } from "../src/core/quota.js";
+import { getReportQuotaUsage, refundReportQuota, reserveReportQuota, type QuotaDecision } from "../src/core/quota.js";
 import { renderReport, renderInsufficient, renderFailed } from "../src/render/report.js";
 import type { ImageInput } from "../src/providers/llm.js";
 import type { Tier, UserInputs, ReportMeta } from "../src/types.js";
@@ -166,6 +166,27 @@ async function readWorkerQuota(env: WorkerEnv): Promise<QuotaDecision> {
   return (await res.json()) as QuotaDecision;
 }
 
+async function refundWorkerQuota(env: WorkerEnv): Promise<QuotaDecision> {
+  if (!env.QUOTA_DO) return refundReportQuota();
+
+  const limit = Math.floor(config.quota.dailyLimit);
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return { allowed: true, used: 0, limit: 0, remaining: 0, mode: "off" };
+  }
+
+  const key = quotaKey();
+  const id = env.QUOTA_DO.idFromName(key);
+  const res = await env.QUOTA_DO.get(id).fetch(
+    new Request("https://quota.local/release", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key, limit }),
+    }),
+  );
+  if (!res.ok) throw new Error(`Cloudflare quota refund failed: ${res.status}`);
+  return (await res.json()) as QuotaDecision;
+}
+
 async function parseRequest(request: Request): Promise<{ tier: Tier; inputs: UserInputs; images: ImageInput[]; error?: Response }> {
   const form = await request.formData();
   const tier: Tier = form.get("tier") === "full" ? "full" : "trial";
@@ -220,6 +241,7 @@ async function handleGenerate(request: Request, env: WorkerEnv): Promise<Respons
 
   const { tier, inputs, images } = parsed;
 
+  let quotaReserved = false;
   try {
     const quota = await reserveWorkerQuota(tier, env);
     if (!quota.allowed) {
@@ -233,6 +255,7 @@ async function handleGenerate(request: Request, env: WorkerEnv): Promise<Respons
         429,
       );
     }
+    quotaReserved = true;
 
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, rej) => {
@@ -248,10 +271,25 @@ async function handleGenerate(request: Request, env: WorkerEnv): Promise<Respons
 
     const meta: ReportMeta = { tier, createdAt: nowIso(), status: result.status, error: result.error };
     if (result.status === "insufficient_input") return html(renderInsufficient(result.artifacts));
-    if (result.status.endsWith("failed")) return html(renderFailed(meta));
+    if (result.status.endsWith("failed")) {
+      try {
+        await refundWorkerQuota(env);
+      } catch (refundError) {
+        console.error("[quota] 生成失败后退回计数失败：", refundError);
+      }
+      quotaReserved = false;
+      return html(renderFailed(meta));
+    }
     return html(renderReport(meta, result.artifacts));
   } catch (e) {
     console.error(e);
+    if (quotaReserved) {
+      try {
+        await refundWorkerQuota(env);
+      } catch (refundError) {
+        console.error("[quota] 生成失败后退回计数失败：", refundError);
+      }
+    }
     return html(renderFailed({ tier, createdAt: nowIso(), status: "failed", error: e instanceof Error ? e.message : "生成失败" }), 500);
   }
 }
@@ -269,8 +307,10 @@ export class QuotaCounter {
       return json(quotaDecisionFromCount(used, Math.floor(limit), key));
     }
 
+    const url = new URL(request.url);
     const { key, limit } = (await request.json()) as { key: string; limit: number };
-    const used = ((await this.state.storage.get<number>(key)) ?? 0) + 1;
+    const current = (await this.state.storage.get<number>(key)) ?? 0;
+    const used = url.pathname === "/release" ? Math.max(0, current - 1) : current + 1;
     await this.state.storage.put(key, used);
     const cappedUsed = Math.min(used, limit);
     return json({

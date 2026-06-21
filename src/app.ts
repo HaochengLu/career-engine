@@ -4,7 +4,7 @@ import path from "node:path";
 import { config } from "./config.js";
 import { nowIso } from "./util.js";
 import { generateReport } from "./core/pipeline.js";
-import { getReportQuotaUsage, reserveReportQuota } from "./core/quota.js";
+import { getReportQuotaUsage, refundReportQuota, reserveReportQuota } from "./core/quota.js";
 import { renderReport, renderInsufficient, renderFailed } from "./render/report.js";
 import type { ImageInput } from "./providers/llm.js";
 import type { Tier, UserInputs, ReportMeta } from "./types.js";
@@ -68,6 +68,7 @@ app.post("/api/report/generate", upload.array("images", 4), async (req, res) => 
     );
   }
 
+  let quotaReserved = false;
   try {
     const quota = await reserveReportQuota(tier);
     if (!quota.allowed) {
@@ -81,6 +82,7 @@ app.post("/api/report/generate", upload.array("images", 4), async (req, res) => 
         }),
       );
     }
+    quotaReserved = true;
 
     // 主动超时兜底：即使某个 worker 卡住，也在 Vercel 强杀前返回友好失败。
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -97,10 +99,25 @@ app.post("/api/report/generate", upload.array("images", 4), async (req, res) => 
     const meta: ReportMeta = { tier, createdAt: nowIso(), status: result.status, error: result.error };
     res.set("Content-Type", "text/html; charset=utf-8");
     if (result.status === "insufficient_input") return res.send(renderInsufficient(result.artifacts));
-    if (result.status.endsWith("failed")) return res.send(renderFailed(meta));
+    if (result.status.endsWith("failed")) {
+      try {
+        await refundReportQuota();
+      } catch (refundError) {
+        console.error("[quota] 生成失败后退回计数失败：", refundError);
+      }
+      quotaReserved = false;
+      return res.send(renderFailed(meta));
+    }
     return res.send(renderReport(meta, result.artifacts));
   } catch (e) {
     console.error(e);
+    if (quotaReserved) {
+      try {
+        await refundReportQuota();
+      } catch (refundError) {
+        console.error("[quota] 生成失败后退回计数失败：", refundError);
+      }
+    }
     res.status(500).set("Content-Type", "text/html; charset=utf-8");
     return res.send(renderFailed({ tier, createdAt: nowIso(), status: "failed", error: e instanceof Error ? e.message : "生成失败" }));
   }

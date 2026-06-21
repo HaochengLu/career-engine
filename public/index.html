@@ -323,6 +323,9 @@ async function buildPayload(form) {
 
 function normalizeError(err) {
   const text = err && err.message ? err.message : String(err);
+  if (text.includes('524') || text.includes('504') || text.includes('408') || text.includes('上游模型服务超时')) {
+    return '上游模型服务超时。系统已尽量重试；请稍后再试，或减少截图张数后重试。';
+  }
   if (text.includes('Failed to fetch')) {
     return '请求没有到达服务器，通常是图片太大或网络中断。请减少截图张数、裁剪图片后重试。';
   }

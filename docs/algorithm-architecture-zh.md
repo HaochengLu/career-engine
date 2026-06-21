@@ -375,16 +375,16 @@ QA 检查：
 
 ### 6.1 生产默认配置
 
-这套配置把 `gpt-5.5` 留给最影响报告质量的环节，把 `gpt-5.4` 用在视觉解析和查漏，兼顾效果、成本和同步请求时长。
+这套配置优先降低第三方 OpenAI 兼容代理的同步超时风险。默认把图片解析、证据抽取、策略生成、Red Team 都放到 `gpt-5.4-mini`，并在 524/504/408 这类上游超时时自动重试一次；如果仍超时，会自动降级到 `OPENAI_MODEL`（默认也是 `gpt-5.4-mini`）再试。
 
 | 环节 | 默认模型 | 原因 |
 | --- | --- | --- |
 | parseResume | `gpt-5.4-mini` | 需要读图片和结构化简历内容；该环节以提取为主，用最快模型降低图片解析超时风险 |
-| extractEvidence | `gpt-5.5` | 证据拆分和强度评级是全链路地基，错了会污染后续 |
+| extractEvidence | `gpt-5.4-mini` | 证据拆分和强度评级是全链路地基，但也是长输出高风险环节；默认先控时延 |
 | synthesizeRoles | `gpt-5.5` | 需要开放世界职业本体合成、多通道召回、硬门槛意识 |
 | opportunityScout | `gpt-5.4` | 条件触发的查漏环节，重点是补高上限相邻方向，用 `gpt-5.4` 控制时延 |
-| strategy | `gpt-5.5` | 最终用户读到的报告，需要判断、取舍、中文表达和行动建议 |
-| redTeam | `gpt-5.5` | 需要强反驳、证据蕴含检查和安全保守性 |
+| strategy | `gpt-5.4-mini` | 最终报告长输出容易触发代理 524；默认先保证能返回 |
+| redTeam | `gpt-5.4-mini` | 审查环节默认使用快模型；代理稳定时可升到 `gpt-5.4` 或 `gpt-5.5` |
 | marketSignal | `gpt-5.4-mini` 或关闭 | 只提供市场上下文，失败会自动降级；默认不让市场搜索影响主流程稳定性 |
 | capabilityVector / scoreRoles / arbitrate / qa | 代码 | 必须确定性、可复现、可审计 |
 
@@ -395,33 +395,33 @@ LLM_PROVIDER=openai
 OPENAI_BASE_URL=
 OPENAI_MODEL=gpt-5.4-mini
 WORKER_MODEL_PARSE_RESUME=gpt-5.4-mini
-WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
+WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.4-mini
 WORKER_MODEL_SYNTHESIZE_ROLES=gpt-5.5
 WORKER_MODEL_OPPORTUNITY_SCOUT=gpt-5.4
-WORKER_MODEL_STRATEGY=gpt-5.5
-WORKER_MODEL_RED_TEAM=gpt-5.5
+WORKER_MODEL_STRATEGY=gpt-5.4-mini
+WORKER_MODEL_RED_TEAM=gpt-5.4-mini
 ```
 
 如果使用官方 OpenAI 或第三方/自建兼容网关，只在 `.env`、Cloudflare Secrets、Vercel Environment Variables 或服务器 secret manager 里填写真实 base URL；公开文档和 GitHub 提交里不要写私有网关域名。
 
 ### 6.2 低成本配置
 
-适合：演示、低频试用、Hobby 项目、或者先验证产品需求。
+适合：演示、低频试用、Hobby 项目、第三方代理容易超时，或者先验证产品需求。
 
 | 环节 | 推荐模型 | 风险 |
 | --- | --- | --- |
 | parseResume | `gpt-5.4-mini` | 模糊图和复杂排版可能漏信息 |
-| extractEvidence | `gpt-5.4` | 不建议降到 nano/mini 以下，证据评级错会污染后续 |
+| extractEvidence | `gpt-5.4-mini` | 质量低于大模型，但更不容易触发 524 |
 | synthesizeRoles | `gpt-5.4` | 基本可用，但新兴/跨行业方向可能变保守 |
 | opportunityScout | `gpt-5.4-mini` 或跳过 | 可能漏高上限相邻方向 |
-| strategy | `gpt-5.4` | 报告质量低于 `gpt-5.5` |
-| redTeam | `gpt-5.4` | 不建议用太弱模型做安全审查 |
+| strategy | `gpt-5.4-mini` | 报告质量低于 `gpt-5.5`，但更稳 |
+| redTeam | `gpt-5.4-mini` | 审查深度低于大模型 |
 
-低成本配置不建议把所有 worker 都换成最快模型。最小保留原则：
+如果代理稳定、用户更看重质量，可以优先把这三个环节升回更强模型：
 
-- `extractEvidence` 至少用 `gpt-5.4`。
-- `strategy` 至少用 `gpt-5.4`。
-- `redTeam` 至少用 `gpt-5.4`。
+- `extractEvidence` 升到 `gpt-5.4` 或 `gpt-5.5`。
+- `strategy` 升到 `gpt-5.4` 或 `gpt-5.5`。
+- `redTeam` 升到 `gpt-5.4` 或 `gpt-5.5`。
 
 ### 6.3 不同环节为什么需要不同模型
 
@@ -441,13 +441,13 @@ WORKER_MODEL_RED_TEAM=gpt-5.5
 
 ```ts
 WORKER_MODEL_PARSE_RESUME=gpt-5.4-mini
-WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.5
+WORKER_MODEL_EXTRACT_EVIDENCE=gpt-5.4-mini
 WORKER_MODEL_SYNTHESIZE_ROLES_FAST=gpt-5.4-mini
 WORKER_MODEL_SYNTHESIZE_ROLES=gpt-5.5
 WORKER_MODEL_OPPORTUNITY_SCOUT=gpt-5.4
 WORKER_MODEL_STRATEGY_FAST=gpt-5.4-mini
-WORKER_MODEL_STRATEGY=gpt-5.5
-WORKER_MODEL_RED_TEAM=gpt-5.5
+WORKER_MODEL_STRATEGY=gpt-5.4-mini
+WORKER_MODEL_RED_TEAM=gpt-5.4-mini
 ```
 
 每个 worker 都可以通过环境变量独立换模型，不需要改业务逻辑。
